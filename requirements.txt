@@ -1,0 +1,6 @@
+python-telegram-bot
+requests
+httpx
+python-dotenv
+curl_cffi
+beautifulsoup4
