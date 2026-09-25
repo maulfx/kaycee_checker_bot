@@ -16,11 +16,13 @@ Usage:
     3. Send a TikTok link to the bot on Telegram
 """
 
+import asyncio
 import re
 import html as html_module
 import logging
 import json
 import httpx
+from io import BytesIO
 from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import (
     Application,
