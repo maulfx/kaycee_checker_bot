@@ -68,11 +68,11 @@ def _calculate_quality_tier_string(width: int, height: int, fps: int = 30, devic
     """Calculate quality string tier like 1080p60, 720p60, 720p30."""
     max_dim = max(width, height)
     if max_dim >= 2160:
-        res = "2160p" if device == "phone" else "1080p"
+        res = "2160p"
     elif max_dim >= 1440:
-        res = "1440p" if device == "phone" else "1080p"
+        res = "1440p"
     elif max_dim >= 1080:
-        res = "1080p" if device == "phone" else "720p"
+        res = "1080p"
     elif max_dim >= 720:
         res = "720p"
     elif max_dim >= 480:
@@ -254,22 +254,31 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
         vq_score = float(raw_vq) if raw_vq else 0.0
 
         # ─── Quality Tiers ───
-        # Determine max browser FPS from web streams (e.g. normal_720_0)
-        browser_fps = 30
+        top_stream = sorted_streams[0] if sorted_streams else {}
+        top_w = top_stream.get("width", max_width or width)
+        top_h = top_stream.get("height", max_height or height)
+        top_fps = top_stream.get("fps", 30)
+
+        # Phone quality tier based on top available stream
+        phone_fps = 60 if top_fps >= 50 else 30
+        phone_q = _calculate_quality_tier_string(top_w, top_h, phone_fps, "phone")
+
+        # Browser quality tier: check highest web-available stream
+        browser_max_w, browser_max_h, browser_max_fps = 0, 0, 30
         for s in sorted_streams:
-            if "normal" in s.get("gear", "") or "720" in s.get("gear", ""):
-                if s.get("fps", 30) >= 50:
-                    browser_fps = 60
-                    break
+            gear_name = s.get("gear", "").lower()
+            if "adapt" in gear_name or "normal" in gear_name or "play_addr" in gear_name or "1080" in gear_name:
+                sw = s.get("width", 0)
+                sh = s.get("height", 0)
+                sfps = s.get("fps", 30)
+                if sw * sh > browser_max_w * browser_max_h or (sw * sh == browser_max_w * browser_max_h and sfps > browser_max_fps):
+                    browser_max_w, browser_max_h, browser_max_fps = sw, sh, sfps
 
-        phone_fps = 30
-        if sorted_streams:
-            top_stream = sorted_streams[0]
-            if top_stream.get("fps", 30) >= 50:
-                phone_fps = 60
+        if browser_max_w == 0:
+            browser_max_w, browser_max_h, browser_max_fps = top_w, top_h, top_fps
 
-        browser_q = _calculate_quality_tier_string(min(max_width or width, 720), min(max_height or height, 1280), browser_fps, "browser")
-        phone_q = _calculate_quality_tier_string(max_width or width, max_height or height, phone_fps, "phone")
+        browser_fps = 60 if browser_max_fps >= 50 else 30
+        browser_q = _calculate_quality_tier_string(browser_max_w, browser_max_h, browser_fps, "browser")
 
         logger.info("Successfully fetched video data via Engine 1 (Direct Web Rehydration Scraper)")
         return {

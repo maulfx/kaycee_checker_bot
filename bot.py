@@ -376,7 +376,7 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 # ─── Callback: Check (Full Analysis) ─────────────────────────
 async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle Check button - run video quality analysis and send video with formatted caption."""
+    """Handle Check button - run video quality analysis, send analysis text and video file."""
     query = update.callback_query
     await query.answer("🔍 Checking video quality...")
 
@@ -390,8 +390,15 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     try:
-        video_url = tiktok_data.get("hdplay_url") or tiktok_data.get("play_url", "")
-        video_quality = await analyze_video(video_url, fallback_data=tiktok_data)
+        # Determine the highest resolution stream URL
+        bitrate_info = tiktok_data.get("bitrate_info", [])
+        best_url = ""
+        if bitrate_info:
+            best_url = bitrate_info[0].get("url", "")
+        if not best_url:
+            best_url = tiktok_data.get("hdplay_url") or tiktok_data.get("play_url", "")
+
+        video_quality = await analyze_video(best_url, fallback_data=tiktok_data)
 
         final_width = video_quality.get("width") or tiktok_data.get("width", 0)
         final_height = video_quality.get("height") or tiktok_data.get("height", 0)
@@ -409,31 +416,39 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         message = format_analysis_message(tiktok_data, video_quality, vq)
 
-        # Download video buffer and send directly as Telegram Video
-        sent_video = False
-        if video_url:
+        # 1. Send the full analysis message
+        await query.message.reply_text(
+            message,
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+
+        # 2. Download and send the highest resolution video file
+        if best_url:
             try:
-                async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-                    resp = await client.get(video_url, headers={"User-Agent": "Mozilla/5.0"})
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+                    "Referer": "https://www.tiktok.com/",
+                }
+                async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+                    resp = await client.get(best_url, headers=headers)
                     if resp.status_code == 200 and len(resp.content) > 1000:
                         from io import BytesIO
                         video_bytes = BytesIO(resp.content)
-                        video_bytes.name = f"{video_id}.mp4"
+                        video_bytes.name = f"{video_id}_{final_width}x{final_height}.mp4"
+                        
+                        top_res_label = f"{final_width}x{final_height}"
+                        vid_caption = f"🎬 <b>{html_module.escape(tiktok_data.get('author_nickname', 'Video'))}</b> • {top_res_label} ({final_fps}fps • {final_codec})"
+                        
                         await query.message.reply_video(
                             video=video_bytes,
-                            caption=message,
+                            caption=vid_caption,
                             parse_mode=ParseMode.HTML,
+                            width=final_width if final_width > 0 else None,
+                            height=final_height if final_height > 0 else None,
                         )
-                        sent_video = True
             except Exception as vid_err:
-                logger.warning(f"Failed to send downloaded video stream: {vid_err}")
-
-        if not sent_video:
-            await query.message.reply_text(
-                message,
-                parse_mode=ParseMode.HTML,
-                disable_web_page_preview=True,
-            )
+                logger.warning(f"Failed to send highest resolution video stream: {vid_err}")
 
         logger.info(
             f"Check complete: @{tiktok_data.get('author_username')} - "
