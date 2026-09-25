@@ -185,7 +185,7 @@ def format_analysis_message(
     
     # Title wrapped in blockquote
     if title:
-        display_title = title if len(title) <= 250 else title[:247] + "..."
+        display_title = title if len(title) <= 150 else title[:147] + "..."
         lines.append(f"<blockquote>{display_title}</blockquote>")
     
     # Music info
@@ -199,22 +199,22 @@ def format_analysis_message(
     
     # ═══ STATISTICS ═══
     lines.append("📊 <b>Statistics</b>")
-    lines.append(f"  • 👁 <b>{_format_number(views)}</b> Views")
-    lines.append(f"  • ♡ <b>{_format_number(likes)}</b> Likes")
-    lines.append(f"  • 💬 <b>{_format_number(comments)}</b> Comments")
-    lines.append(f"  • 🔖 <b>{_format_number(favorites)}</b> Favorites")
-    lines.append(f"  • ➦ <b>{_format_number(shares)}</b> Shares")
-    lines.append(f"  • ⤓ <b>{_format_number(downloads)}</b> Downloads")
+    lines.append(f"• 👁 <b>{_format_number(views)}</b> Views")
+    lines.append(f"• ♡ <b>{_format_number(likes)}</b> Likes")
+    lines.append(f"• 💬 <b>{_format_number(comments)}</b> Comments")
+    lines.append(f"• 🔖 <b>{_format_number(favorites)}</b> Favorites")
+    lines.append(f"• ➦ <b>{_format_number(shares)}</b> Shares")
+    lines.append(f"• ⤓ <b>{_format_number(downloads)}</b> Downloads")
     lines.append("")
     
     # ═══ INFORMATION ═══
     lines.append("ℹ <b>Information</b>")
-    lines.append(f"  • 🔗 ID ┃ <code>{video_id}</code>")
-    lines.append(f"  • ⤓ Source ┃ {source}")
-    lines.append(f"  • 📍 Region ┃ {region_flag} {region_name}")
-    lines.append(f"  • 👻 Shadow ban ┃ {shadow_ban}")
+    lines.append(f"• 🔗 ID | <code>{video_id}</code>")
+    lines.append(f"• ⤓ Source | {source}")
+    lines.append(f"• 📍 Region | {region_flag} {region_name}")
+    lines.append(f"• 👻 Shadow ban | {shadow_ban}")
     if tiktok_data.get("is_ad"):
-        lines.append(f"  • 📢 Ad ┃ Yes")
+        lines.append(f"• 📢 Ad | Yes")
     lines.append("")
     
     # ═══ QUALITY ═══
@@ -291,6 +291,15 @@ def format_analysis_message(
     if categories:
         lines.append("🏷 <b>Categories</b>")
         for cat in categories:
-            lines.append(f"  | {cat}")
+            lines.append(f"• {cat}")
     
-    return "\n".join(lines)
+    full_msg = "\n".join(lines)
+    # Ensure message is strictly <= 1024 characters for Telegram video captions
+    if len(full_msg) > 1024:
+        excess = len(full_msg) - 1020
+        if title and len(title) > excess + 20:
+            new_title = title[:len(title) - excess - 10] + "..."
+            lines[1] = f"<blockquote>{new_title}</blockquote>"
+            full_msg = "\n".join(lines)
+
+    return full_msg

@@ -448,7 +448,7 @@ async def _download_tiktok_video_bytes(orig_url: str, fallback_url: str = "", qu
 
 # ─── Callback: Check (Full Analysis) ─────────────────────────
 async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle Check button - delete previous menu, run video quality analysis, send analysis text and video file."""
+    """Handle Check button - delete previous menu, run video quality analysis, send video with analysis caption in one message."""
     query = update.callback_query
     await query.answer("🔍 Checking video quality...")
 
@@ -500,15 +500,8 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         message = format_analysis_message(tiktok_data, video_quality, vq)
 
-        # 1. Send the full analysis message
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=message,
-            parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True,
-        )
-
-        # 2. Download and send the highest resolution video file
+        # Download and send the highest resolution video file with analysis caption in one message
+        sent_video = False
         raw_bytes = await _download_tiktok_video_bytes(orig_url, fallback_url=best_url, quality="best")
         if raw_bytes:
             try:
@@ -516,20 +509,27 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 video_bytes = BytesIO(raw_bytes)
                 video_bytes.name = f"{video_id}_{final_width}x{final_height}.mp4"
                 
-                top_res_label = f"{final_width}x{final_height}"
-                vid_caption = f"🎬 <b>{html_module.escape(tiktok_data.get('author_nickname', 'Video'))}</b> • {top_res_label} ({final_fps}fps • {final_codec})"
-                
                 await context.bot.send_video(
                     chat_id=chat_id,
                     video=video_bytes,
-                    caption=vid_caption,
+                    caption=message,
                     parse_mode=ParseMode.HTML,
                     width=final_width if final_width > 0 else None,
                     height=final_height if final_height > 0 else None,
                     supports_streaming=True,
                 )
+                sent_video = True
             except Exception as vid_err:
-                logger.warning(f"Failed to send highest resolution video stream: {vid_err}")
+                logger.warning(f"Failed to send video with analysis caption: {vid_err}")
+
+        # Fallback to text message if video sending failed
+        if not sent_video:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=message,
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
 
         logger.info(
             f"Check complete: @{tiktok_data.get('author_username')} - "
@@ -550,7 +550,7 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 # ─── Callback: Download Video ────────────────────────────────
 async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle download buttons (540p, 720p, 1080p, original) - delete menu and send in-app playable video."""
+    """Handle download buttons (540p, 720p, 1080p, original) - delete menu and send in-app playable video with caption & hashtags."""
     query = update.callback_query
     chat_id = query.message.chat_id
 
@@ -616,6 +616,23 @@ async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     w = target_stream.get("width", 0) if target_stream else tiktok_data.get("width", 0)
     h = target_stream.get("height", 0) if target_stream else tiktok_data.get("height", 0)
 
+    # Build download caption with author, caption, hashtags
+    raw_title = tiktok_data.get("title", "")
+    author_nickname = html_module.escape(tiktok_data.get("author_nickname", "Video"))
+    author_username = html_module.escape(tiktok_data.get("author_username", ""))
+
+    caption_lines = [f"🎵 <b>{author_nickname}</b>  👤 @{author_username}"]
+    if raw_title:
+        display_title = html_module.escape(raw_title)
+        if len(display_title) > 300:
+            display_title = display_title[:297] + "..."
+        caption_lines.append(f"<blockquote>{display_title}</blockquote>")
+
+    caption_lines.append(f"📥 <b>TikTok Video ({label})</b> • {w}x{h}")
+    vid_caption = "\n".join(caption_lines)
+    if len(vid_caption) > 1024:
+        vid_caption = vid_caption[:1020] + "..."
+
     raw_bytes = await _download_tiktok_video_bytes(orig_url, fallback_url=download_url, quality=quality)
     if raw_bytes:
         try:
@@ -625,7 +642,7 @@ async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             await context.bot.send_video(
                 chat_id=chat_id,
                 video=v_bytes,
-                caption=f"📥 <b>TikTok Video ({label})</b>\n👤 @{html_module.escape(tiktok_data.get('author_username', ''))}",
+                caption=vid_caption,
                 parse_mode=ParseMode.HTML,
                 width=w if w > 0 else None,
                 height=h if h > 0 else None,
