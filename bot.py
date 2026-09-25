@@ -134,14 +134,14 @@ def _build_action_keyboard(data: dict, video_id: str) -> InlineKeyboardMarkup:
 
     for stream in bitrate_info:
         max_dim = max(stream.get("width", 0), stream.get("height", 0))
-        gear = stream.get("gear", "")
+        gear = stream.get("gear", "").lower()
         if max_dim >= 1080 or "1080" in gear:
             if stream_1080 is None:
                 stream_1080 = stream
-        elif max_dim >= 720 or "720" in gear:
+        elif (720 <= max_dim < 1080) or "720" in gear:
             if stream_720 is None:
                 stream_720 = stream
-        elif max_dim >= 480 or "540" in gear or "lower" in gear:
+        elif (480 <= max_dim < 720) or "540" in gear or "576" in gear or "480" in gear or "lower" in gear or "lowest" in gear:
             if stream_540 is None:
                 stream_540 = stream
 
@@ -157,20 +157,47 @@ def _build_action_keyboard(data: dict, video_id: str) -> InlineKeyboardMarkup:
             return f"🎬 {prefix} • {size_str}"
         return f"🎬 {prefix}"
 
-    # Build keyboard rows
+    # Build keyboard row only for available resolution tiers
     row1 = []
-    row1.append(InlineKeyboardButton(
-        _stream_label("576p", stream_540),
-        callback_data=f"dl_540_{video_id}"
-    ))
-    row1.append(InlineKeyboardButton(
-        _stream_label("720p", stream_720),
-        callback_data=f"dl_720_{video_id}"
-    ))
-    row1.append(InlineKeyboardButton(
-        _stream_label("1080p", stream_1080),
-        callback_data=f"dl_1080_{video_id}"
-    ))
+    if stream_540:
+        row1.append(InlineKeyboardButton(
+            _stream_label("576p", stream_540),
+            callback_data=f"dl_540_{video_id}"
+        ))
+    if stream_720:
+        row1.append(InlineKeyboardButton(
+            _stream_label("720p", stream_720),
+            callback_data=f"dl_720_{video_id}"
+        ))
+    if stream_1080:
+        row1.append(InlineKeyboardButton(
+            _stream_label("1080p", stream_1080),
+            callback_data=f"dl_1080_{video_id}"
+        ))
+
+    # If no specific tier was matched in bitrate_info, use the main video resolution
+    if not row1:
+        w = data.get("width", 0)
+        h = data.get("height", 0)
+        max_dim = max(w, h)
+        size_val = data.get("hd_size") or data.get("size") or 0
+        dummy_stream = {"data_size": size_val}
+        if max_dim >= 1080:
+            row1.append(InlineKeyboardButton(
+                _stream_label("1080p", dummy_stream),
+                callback_data=f"dl_1080_{video_id}"
+            ))
+        elif max_dim >= 720:
+            row1.append(InlineKeyboardButton(
+                _stream_label("720p", dummy_stream),
+                callback_data=f"dl_720_{video_id}"
+            ))
+        else:
+            tag = f"{max_dim}p" if max_dim > 0 else "576p"
+            row1.append(InlineKeyboardButton(
+                _stream_label(tag, dummy_stream),
+                callback_data=f"dl_540_{video_id}"
+            ))
 
     row2 = [
         InlineKeyboardButton("⚡ Original", callback_data=f"dl_orig_{video_id}"),
@@ -191,7 +218,10 @@ def _build_action_keyboard(data: dict, video_id: str) -> InlineKeyboardMarkup:
         InlineKeyboardButton(f"🎵 @{username}", url=f"https://www.tiktok.com/@{username}"),
     ]
 
-    keyboard = [row1, row2, row3, row4, row5]
+    keyboard = []
+    if row1:
+        keyboard.append(row1)
+    keyboard.extend([row2, row3, row4, row5])
     return InlineKeyboardMarkup(keyboard)
 
 
