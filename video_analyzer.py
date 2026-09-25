@@ -277,9 +277,9 @@ async def analyze_video(video_url: str, fallback_data: dict = None) -> dict:
         except Exception as e:
             logger.warning(f"ffprobe execution warning: {e}")
 
-    # Re-calculate quality tiers with the most accurate resolution and FPS
-    result["browser_quality"] = _calculate_quality_tier(result["width"], result["height"], 30, "browser")
-    result["phone_quality"] = _calculate_quality_tier(result["width"], result["height"], result["fps"], "phone")
+    # Re-calculate quality tiers with the most accurate resolution and FPS if not already resolved
+    result["browser_quality"] = fallback_data.get("browser_quality") or _calculate_quality_tier(result["width"], result["height"], 30, "browser")
+    result["phone_quality"] = fallback_data.get("phone_quality") or _calculate_quality_tier(result["width"], result["height"], result["fps"], "phone")
     
     return result
 

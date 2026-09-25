@@ -263,22 +263,18 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
         phone_fps = 60 if top_fps >= 50 else 30
         phone_q = _calculate_quality_tier_string(top_w, top_h, phone_fps, "phone")
 
-        # Browser quality tier: check highest web-available stream
-        browser_max_w, browser_max_h, browser_max_fps = 0, 0, 30
-        for s in sorted_streams:
-            gear_name = s.get("gear", "").lower()
-            if "adapt" in gear_name or "normal" in gear_name or "play_addr" in gear_name or "1080" in gear_name:
-                sw = s.get("width", 0)
-                sh = s.get("height", 0)
-                sfps = s.get("fps", 30)
-                if sw * sh > browser_max_w * browser_max_h or (sw * sh == browser_max_w * browser_max_h and sfps > browser_max_fps):
-                    browser_max_w, browser_max_h, browser_max_fps = sw, sh, sfps
-
-        if browser_max_w == 0:
-            browser_max_w, browser_max_h, browser_max_fps = top_w, top_h, top_fps
-
-        browser_fps = 60 if browser_max_fps >= 50 else 30
-        browser_q = _calculate_quality_tier_string(browser_max_w, browser_max_h, browser_fps, "browser")
+        # Browser quality tier: check web definition / ratio / base web width & height
+        browser_ratio = str(video.get("ratio") or video.get("definition") or "").lower()
+        if "1080" in browser_ratio or (width >= 1080 and height >= 1080):
+            browser_q = f"1080p{phone_fps}"
+        elif "720" in browser_ratio or (width >= 720 or height >= 720):
+            browser_q = f"720p{phone_fps}"
+        elif "540" in browser_ratio or (width >= 540 or height >= 540):
+            browser_q = f"540p{phone_fps}"
+        elif "480" in browser_ratio or (width >= 480 or height >= 480):
+            browser_q = f"480p{phone_fps}"
+        else:
+            browser_q = _calculate_quality_tier_string(width or top_w, height or top_h, phone_fps, "browser")
 
         logger.info("Successfully fetched video data via Engine 1 (Direct Web Rehydration Scraper)")
         return {
