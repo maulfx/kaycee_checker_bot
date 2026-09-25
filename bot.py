@@ -233,25 +233,25 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "  ✨  <b>TikTok Video Analyzer</b>\n"
         "└─────────────────────────────┘\n"
         "\n"
-        "Selamat datang! 👋\n"
+        "Welcome! 👋\n"
         "\n"
-        "Bot ini menganalisis kualitas video TikTok secara otomatis.\n"
-        "Cukup kirim <b>link video TikTok</b> dan saya akan memberikan:\n"
+        "This bot analyzes TikTok video quality automatically.\n"
+        "Simply send a <b>TikTok video link</b> and you will get:\n"
         "\n"
         "  📥  Download video (576p, 720p, 1080p)\n"
         "  ⚡  Original quality download\n"
-        "  🎵  Extract audio MP3\n"
+        "  🎵  Extract MP3 audio\n"
         "  🔍  Shazam music detection\n"
-        "  ▶️  Preview video\n"
+        "  ▶️  Video preview\n"
         "  🔎  Full quality check & analysis\n"
         "\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "📋 <b>Format link yang didukung:</b>\n"
+        "📋 <b>Supported link formats:</b>\n"
         "  • <code>https://www.tiktok.com/@user/video/...</code>\n"
         "  • <code>https://vm.tiktok.com/...</code>\n"
         "  • <code>https://vt.tiktok.com/...</code>\n"
         "\n"
-        "Kirim linknya sekarang! 🚀"
+        "Send your link now! 🚀"
     )
     await update.message.reply_text(welcome, parse_mode=ParseMode.HTML)
 
@@ -260,26 +260,26 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /help command."""
     help_text = (
-        "🔎 <b>Cara Penggunaan:</b>\n"
+        "🔎 <b>How to Use:</b>\n"
         "\n"
-        "1️⃣  Buka video TikTok yang ingin dianalisis\n"
-        "2️⃣  Salin link video (tombol Share → Copy Link)\n"
-        "3️⃣  Kirim link ke chat ini\n"
-        "4️⃣  Pilih action dari tombol yang muncul!\n"
+        "1️⃣  Open the TikTok video you want to analyze\n"
+        "2️⃣  Copy the video link (Share → Copy Link)\n"
+        "3️⃣  Send the link to this chat\n"
+        "4️⃣  Choose an action from the buttons below!\n"
         "\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "✨ <b>Actions:</b>\n"
         "  • 576p/720p/1080p - Download video\n"
-        "  • Original - Download kualitas asli\n"
-        "  • MP3 - Extract audio saja\n"
-        "  • Shazam - Deteksi musik\n"
-        "  • Preview - Preview video\n"
+        "  • Original - Download original quality\n"
+        "  • MP3 - Extract audio only\n"
+        "  • Shazam - Detect music & artist\n"
+        "  • Preview - Watch video preview\n"
         "  • Check - Full quality analysis\n"
         "\n"
         "📋 <b>Commands:</b>\n"
-        "  /start - Mulai bot\n"
-        "  /help  - Bantuan penggunaan\n"
-        "  /about - Tentang bot ini\n"
+        "  /start - Start the bot\n"
+        "  /help  - Usage guide\n"
+        "  /about - About the bot & VQ Score\n"
     )
     await update.message.reply_text(help_text, parse_mode=ParseMode.HTML)
 
@@ -290,13 +290,13 @@ async def cmd_about(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     about_text = (
         "✦ <b>TikTok Video Analyzer Bot</b>\n"
         "\n"
-        "Bot ini membantu kreator TikTok untuk:\n"
-        "  • Download video berbagai resolusi\n"
-        "  • Extract audio MP3\n"
-        "  • Mengecek kualitas upload video\n"
-        "  • Memantau statistik engagement\n"
-        "  • Mendeteksi potensi shadow ban\n"
-        "  • Mendapatkan skor kualitas video (VQ Score)\n"
+        "This bot helps TikTok creators to:\n"
+        "  • Download videos in multiple resolutions\n"
+        "  • Extract MP3 audio tracks\n"
+        "  • Inspect upload quality & compression\n"
+        "  • Monitor real engagement statistics\n"
+        "  • Detect potential shadowbans\n"
+        "  • Measure video quality rating (VQ Score)\n"
         "\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "📊 <b>VQ Score Guide (0 = No Compress / Lossless):</b>\n"
@@ -306,11 +306,11 @@ async def cmd_about(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "  🟠  46 - 60  Medium Compression (Fair)\n"
         "  🔴  > 60     Heavy Compression (Poor)\n"
         "\n"
-        "💡 <b>Tips agar VQ Score rendah (Mendekati 0):</b>\n"
-        "  • Upload dengan resolusi 1080p atau lebih\n"
-        "  • Gunakan bitrate tinggi & codec H.265/HEVC\n"
-        "  • Record di 60fps untuk konten cepat\n"
-        "  • Hindari kompresi ulang berlebihan sebelum upload\n"
+        "💡 <b>Tips for lower VQ Score (Closer to 0):</b>\n"
+        "  • Upload in 1080p resolution or higher\n"
+        "  • Use higher bitrate & H.265/HEVC codec\n"
+        "  • Record at 60fps for high-motion content\n"
+        "  • Avoid multiple re-compressions before uploading\n"
     )
     await update.message.reply_text(about_text, parse_mode=ParseMode.HTML)
 
@@ -397,10 +397,10 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
         error_msg = html_module.escape(str(e))
         if len(error_msg) > 200:
             error_msg = error_msg[:197] + "..."
-        await status_msg.edit_text(
-            f"❌ <b>Terjadi kesalahan</b>\n\n"
+        await update.message.reply_text(
+            f"❌ <b>An error occurred</b>\n\n"
             f"<code>{error_msg}</code>\n\n"
-            f"Silakan coba lagi nanti.",
+            f"Please try again later.",
             parse_mode=ParseMode.HTML,
         )
 
@@ -480,7 +480,7 @@ async def _download_tiktok_video_bytes(orig_url: str, fallback_url: str = "", qu
 # ─── Animated Loading Helper ─────────────────────────────────
 async def _start_loading_animation(
     query,
-    action_text: str = "Memproses permintaan...",
+    action_text: str = "Processing request...",
     steps: list[tuple[str, str]] | None = None,
 ) -> asyncio.Task | None:
     """
@@ -493,15 +493,15 @@ async def _start_loading_animation(
 
     if steps is None:
         steps = [
-            ("Mengambil data video...", "▰▱▱▱▱"),
-            ("Mengunduh stream kualitas terbaik...", "▰▰▱▱▱"),
-            ("Menganalisis codec & VQ Score...", "▰▰▰▱▱"),
-            ("Menyusun format output...", "▰▰▰▰▱"),
-            ("Mengirim ke Telegram...", "▰▰▰▰▰"),
+            ("Fetching video data...", "▰▱▱▱▱"),
+            ("Downloading best quality stream...", "▰▰▱▱▱"),
+            ("Analyzing codec & VQ Score...", "▰▰▰▱▱"),
+            ("Generating formatted output...", "▰▰▰▰▱"),
+            ("Sending to Telegram...", "▰▰▰▰▰"),
         ]
 
     initial_caption = (
-        f"⏳ <b>Memproses Permintaan...</b>\n\n"
+        f"⏳ <b>Processing Request...</b>\n\n"
         f"<code>[▰▱▱▱▱]</code> <i>{html_module.escape(action_text)}</i>"
     )
 
@@ -526,7 +526,7 @@ async def _start_loading_animation(
             for step_text, bar in steps:
                 await asyncio.sleep(1.2)
                 frame_text = (
-                    f"⏳ <b>Memproses Permintaan...</b>\n\n"
+                    f"⏳ <b>Processing Request...</b>\n\n"
                     f"<code>[{bar}]</code> <i>{html_module.escape(step_text)}</i>"
                 )
                 try:
@@ -579,13 +579,13 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     # Start animated loading transition
     anim_task = await _start_loading_animation(
         query,
-        action_text="Menganalisis kualitas video & menyiapkan stream...",
+        action_text="Analyzing video quality & preparing stream...",
         steps=[
-            ("Menganalisis stream video...", "▰▱▱▱▱"),
-            ("Mengunduh video HD...", "▰▰▱▱▱"),
-            ("Menghitung VQScore...", "▰▰▰▱▱"),
-            ("Menyusun pesan hasil...", "▰▰▰▰▱"),
-            ("Mengirim ke Telegram...", "▰▰▰▰▰"),
+            ("Analyzing video streams...", "▰▱▱▱▱"),
+            ("Downloading HD video buffer...", "▰▰▱▱▱"),
+            ("Calculating VQ Score...", "▰▰▰▱▱"),
+            ("Assembling analysis report...", "▰▰▰▰▱"),
+            ("Sending to Telegram...", "▰▰▰▰▰"),
         ],
     )
 
@@ -695,13 +695,13 @@ async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     # Start animated loading transition
     anim_task = await _start_loading_animation(
         query,
-        action_text=f"Menyiapkan download video {label}...",
+        action_text=f"Preparing {label} video download...",
         steps=[
-            (f"Menghubungkan ke stream {label}...", "▰▱▱▱▱"),
-            (f"Mengunduh file video {label}...", "▰▰▱▱▱"),
-            ("Memverifikasi kelengkapan file...", "▰▰▰▱▱"),
-            ("Menyiapkan caption & hashtag...", "▰▰▰▰▱"),
-            ("Mengirim video ke chat...", "▰▰▰▰▰"),
+            (f"Connecting to {label} stream...", "▰▱▱▱▱"),
+            (f"Downloading {label} video file...", "▰▰▱▱▱"),
+            ("Verifying file integrity...", "▰▰▰▱▱"),
+            ("Formatting caption & hashtags...", "▰▰▰▰▱"),
+            ("Sending video to chat...", "▰▰▰▰▰"),
         ],
     )
 
@@ -789,7 +789,7 @@ async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 logger.warning(f"Failed to send video bytes for download: {err}")
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"❌ Gagal mengirim video file {label}.",
+                    text=f"❌ Failed to send {label} video file.",
                     parse_mode=ParseMode.HTML,
                 )
         elif download_url:
@@ -815,17 +815,17 @@ async def callback_mp3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     query = update.callback_query
     video_id = query.data.replace("dl_mp3_", "", 1)
     chat_id = query.message.chat_id
-    await query.answer("🎵 Menyiapkan audio MP3...")
+    await query.answer("🎵 Preparing MP3 audio...")
 
     # Start animated loading transition
     anim_task = await _start_loading_animation(
         query,
-        action_text="Menyiapkan audio MP3...",
+        action_text="Preparing MP3 audio...",
         steps=[
-            ("Mengekstrak audio track...", "▰▱▱▱▱"),
-            ("Mengunduh buffer MP3...", "▰▰▱▱▱"),
-            ("Menyusun metadata ID3...", "▰▰▰▱▱"),
-            ("Mengirim audio ke chat...", "▰▰▰▰▰"),
+            ("Extracting audio track...", "▰▱▱▱▱"),
+            ("Downloading MP3 buffer...", "▰▰▱▱▱"),
+            ("Setting up ID3 metadata...", "▰▰▰▱▱"),
+            ("Sending audio to chat...", "▰▰▰▰▰"),
         ],
     )
 
@@ -834,7 +834,7 @@ async def callback_mp3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if not tiktok_data:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text="❌ Data video tidak ditemukan. Kirim ulang link TikTok-nya.",
+                text="❌ Video data not found. Please resend the TikTok link.",
                 parse_mode=ParseMode.HTML,
             )
             return
@@ -878,7 +878,7 @@ async def callback_mp3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         else:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text="❌ URL audio MP3 tidak tersedia untuk video ini.",
+                text="❌ MP3 audio URL is unavailable for this video.",
                 parse_mode=ParseMode.HTML,
             )
     finally:
@@ -890,12 +890,12 @@ async def callback_shazam(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     """Handle Shazam button - show music info."""
     query = update.callback_query
     video_id = query.data.replace("shazam_", "", 1)
-    await query.answer("🔍 Mendeteksi musik...")
+    await query.answer("🔍 Detecting music...")
 
     tiktok_data = context.bot_data.get("video_cache", {}).get(video_id)
     if not tiktok_data:
         await query.message.reply_text(
-            "❌ Data video tidak ditemukan. Kirim ulang link TikTok-nya.",
+            "❌ Video data not found. Please resend the TikTok link.",
             parse_mode=ParseMode.HTML,
         )
         return
@@ -911,7 +911,7 @@ async def callback_shazam(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     )
 
     if music_url:
-        msg += f"\n<a href=\"{html_module.escape(music_url)}\">🎧 Dengarkan</a>"
+        msg += f"\n<a href=\"{html_module.escape(music_url)}\">🎧 Listen Online</a>"
 
     await query.message.reply_text(
         msg,
@@ -926,16 +926,16 @@ async def callback_preview(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     query = update.callback_query
     video_id = query.data.replace("preview_", "", 1)
     chat_id = query.message.chat_id
-    await query.answer("📺 Menyiapkan preview...")
+    await query.answer("📺 Preparing preview...")
 
     # Start animated loading transition
     anim_task = await _start_loading_animation(
         query,
-        action_text="Menyiapkan preview video...",
+        action_text="Preparing video preview...",
         steps=[
-            ("Mengambil preview stream...", "▰▱▱▱▱"),
-            ("Mengunduh preview buffer...", "▰▰▱▱▱"),
-            ("Mengirim preview video...", "▰▰▰▰▰"),
+            ("Fetching preview stream...", "▰▱▱▱▱"),
+            ("Downloading preview buffer...", "▰▰▱▱▱"),
+            ("Sending video preview...", "▰▰▰▰▰"),
         ],
     )
 
@@ -944,7 +944,7 @@ async def callback_preview(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         if not tiktok_data:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text="❌ Data video tidak ditemukan. Kirim ulang link TikTok-nya.",
+                text="❌ Video data not found. Please resend the TikTok link.",
                 parse_mode=ParseMode.HTML,
             )
             return
@@ -980,14 +980,14 @@ async def callback_preview(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             if not sent:
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"▷ <b>Preview</b>\n\n<a href=\"{html_module.escape(play_url)}\">▶️ Tonton preview</a>\n🔗 <a href=\"{html_module.escape(original_url)}\">Link TikTok asli</a>",
+                    text=f"▷ <b>Preview</b>\n\n<a href=\"{html_module.escape(play_url)}\">▶️ Watch preview</a>\n🔗 <a href=\"{html_module.escape(original_url)}\">Original TikTok link</a>",
                     parse_mode=ParseMode.HTML,
                     disable_web_page_preview=False,
                 )
         else:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"▷ <b>Preview</b>\n\n🔗 <a href=\"{html_module.escape(original_url)}\">Buka di TikTok</a>",
+                text=f"▷ <b>Preview</b>\n\n🔗 <a href=\"{html_module.escape(original_url)}\">Open on TikTok</a>",
                 parse_mode=ParseMode.HTML,
             )
     finally:
@@ -1011,7 +1011,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data.startswith("preview_"):
         await callback_preview(update, context)
     else:
-        await query.answer("❓ Action tidak dikenal.")
+        await query.answer("❓ Unknown action.")
 
 
 # ─── Message Handler ─────────────────────────────────────────
@@ -1023,8 +1023,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await handle_tiktok_link(update, context)
     else:
         await update.message.reply_text(
-            "🎬 Kirim link video TikTok untuk mulai!\n\n"
-            "Contoh:\n"
+            "🎬 Send a TikTok video link to get started!\n\n"
+            "Example:\n"
             "<code>https://www.tiktok.com/@username/video/1234567890</code>",
             parse_mode=ParseMode.HTML,
         )
@@ -1034,9 +1034,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def post_init(application) -> None:
     """Set bot commands menu after initialization."""
     commands = [
-        BotCommand("start", "Mulai bot"),
-        BotCommand("help", "Bantuan penggunaan"),
-        BotCommand("about", "Tentang bot & VQ Score"),
+        BotCommand("start", "Start the bot"),
+        BotCommand("help", "Usage guide"),
+        BotCommand("about", "About bot & VQ Score"),
     ]
     await application.bot.set_my_commands(commands)
     logger.info("Bot commands set successfully")
@@ -1053,21 +1053,21 @@ def main() -> None:
 
     if not BOT_TOKEN:
         print("━" * 50)
-        print("❌ ERROR: TELEGRAM_BOT_TOKEN belum diset!")
+        print("❌ ERROR: TELEGRAM_BOT_TOKEN is not set!")
         print("")
-        print("Langkah setup:")
-        print("  1. Buka @BotFather di Telegram")
-        print("  2. Kirim /newbot dan ikuti instruksi")
-        print("  3. Salin token bot yang diberikan")
-        print("  4. Buat file .env dengan isi:")
-        print("     TELEGRAM_BOT_TOKEN=token_kamu_di_sini")
+        print("Setup steps:")
+        print("  1. Open @BotFather on Telegram")
+        print("  2. Send /newbot and follow instructions")
+        print("  3. Copy your bot token")
+        print("  4. Create .env file with:")
+        print("     TELEGRAM_BOT_TOKEN=your_token_here")
         print("━" * 50)
         return
 
     print("━" * 50)
     print("🎬 TikTok Video Analyzer Bot")
     print("━" * 50)
-    print("🔄 Memulai bot...")
+    print("🔄 Starting bot...")
 
     # Build application
     app = (
@@ -1086,7 +1086,7 @@ def main() -> None:
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
     )
 
-    print("✅ Bot berjalan! Tekan Ctrl+C untuk berhenti.")
+    print("✅ Bot is running! Press Ctrl+C to stop.")
     print("━" * 50)
 
     # Start polling
