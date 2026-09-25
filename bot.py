@@ -85,8 +85,8 @@ def _build_info_caption(data: dict) -> str:
     title = html_module.escape(data.get("title", ""))
 
     lines = []
-    # Header line: TikTok icon + username + date + region
-    lines.append(f"🎵 <b>{username}</b>  📅 {formatted_date}  📍 {region_name}")
+    # Header line: Music icon + username + date + region
+    lines.append(f"♫ <b>{username}</b>  ◷ {formatted_date}  ⚲ {region_name}")
 
     # Caption/title with hashtags in blockquote
     if title:
@@ -96,7 +96,7 @@ def _build_info_caption(data: dict) -> str:
     # Music info
     music_title = data.get("music_title", "")
     if music_title:
-        music_display = f"♫ {html_module.escape(music_title)}"
+        music_display = f"☊ {html_module.escape(music_title)}"
         duration = data.get("duration", 0)
         if duration > 0:
             mins = duration // 60
@@ -115,10 +115,10 @@ def _build_action_keyboard(data: dict, video_id: str) -> InlineKeyboardMarkup:
     Build the inline keyboard with download options, matching the reference UI.
     Layout:
       Row 1: [576p • SIZE] [720p • SIZE] [1080p • SIZE]
-      Row 2: [⚡ Original] [🎵 MP3]
-      Row 3: [◎ Shazam] [📺 Preview]
-      Row 4: [🔍 Check]
-      Row 5: [🎵 username]
+      Row 2: [⚡ Original] [♫ MP3]
+      Row 3: [◎ Shazam] [▷ Preview]
+      Row 4: [⌕ Check]
+      Row 5: [♫ username]
     """
     bitrate_info = data.get("bitrate_info", [])
     duration = data.get("duration", 0)
@@ -171,21 +171,21 @@ def _build_action_keyboard(data: dict, video_id: str) -> InlineKeyboardMarkup:
 
     row2 = [
         InlineKeyboardButton("⚡ Original", callback_data=f"dl_orig_{video_id}"),
-        InlineKeyboardButton("🎵 MP3", callback_data=f"dl_mp3_{video_id}"),
+        InlineKeyboardButton("♫ MP3", callback_data=f"dl_mp3_{video_id}"),
     ]
 
     row3 = [
         InlineKeyboardButton("◎ Shazam", callback_data=f"shazam_{video_id}"),
-        InlineKeyboardButton("📺 Preview", callback_data=f"preview_{video_id}"),
+        InlineKeyboardButton("▷ Preview", callback_data=f"preview_{video_id}"),
     ]
 
     row4 = [
-        InlineKeyboardButton("🔍 Check", callback_data=f"check_{video_id}"),
+        InlineKeyboardButton("⌕ Check", callback_data=f"check_{video_id}"),
     ]
 
     username = data.get("author_username", "unknown")
     row5 = [
-        InlineKeyboardButton(f"🎵 {username}", url=f"https://www.tiktok.com/@{username}"),
+        InlineKeyboardButton(f"♫ @{username}", url=f"https://www.tiktok.com/@{username}"),
     ]
 
     keyboard = [row1, row2, row3, row4, row5]
@@ -197,7 +197,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /start command - send welcome message."""
     welcome = (
         "┌─────────────────────────────┐\n"
-        "  🎬  <b>TikTok Video Analyzer</b>\n"
+        "  ✦  <b>TikTok Video Analyzer</b>\n"
         "└─────────────────────────────┘\n"
         "\n"
         "Selamat datang! 👋\n"
@@ -207,13 +207,13 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "\n"
         "  📥  Download video (576p, 720p, 1080p)\n"
         "  ⚡  Original quality download\n"
-        "  🎵  Extract audio MP3\n"
+        "  ♫  Extract audio MP3\n"
         "  ◎  Shazam music detection\n"
-        "  📺  Preview video\n"
-        "  🔍  Full quality check & analysis\n"
+        "  ▷  Preview video\n"
+        "  ⌕  Full quality check & analysis\n"
         "\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "📌 <b>Format link yang didukung:</b>\n"
+        "⌗ <b>Format link yang didukung:</b>\n"
         "  • <code>https://www.tiktok.com/@user/video/...</code>\n"
         "  • <code>https://vm.tiktok.com/...</code>\n"
         "  • <code>https://vt.tiktok.com/...</code>\n"
@@ -227,7 +227,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /help command."""
     help_text = (
-        "🔍 <b>Cara Penggunaan:</b>\n"
+        "⌕ <b>Cara Penggunaan:</b>\n"
         "\n"
         "1️⃣  Buka video TikTok yang ingin dianalisis\n"
         "2️⃣  Salin link video (tombol Share → Copy Link)\n"
@@ -235,7 +235,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "4️⃣  Pilih action dari tombol yang muncul!\n"
         "\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "🎬 <b>Actions:</b>\n"
+        "✦ <b>Actions:</b>\n"
         "  • 576p/720p/1080p - Download video\n"
         "  • Original - Download kualitas asli\n"
         "  • MP3 - Extract audio saja\n"
@@ -243,7 +243,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "  • Preview - Preview video\n"
         "  • Check - Full quality analysis\n"
         "\n"
-        "⚙️ <b>Commands:</b>\n"
+        "◈ <b>Commands:</b>\n"
         "  /start - Mulai bot\n"
         "  /help  - Bantuan penggunaan\n"
         "  /about - Tentang bot ini\n"
@@ -255,7 +255,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_about(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /about command."""
     about_text = (
-        "🤖 <b>TikTok Video Analyzer Bot</b>\n"
+        "✦ <b>TikTok Video Analyzer Bot</b>\n"
         "\n"
         "Bot ini membantu kreator TikTok untuk:\n"
         "  • Download video berbagai resolusi\n"
@@ -727,7 +727,7 @@ async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         author_nickname = html_module.escape(tiktok_data.get("author_nickname", "Video"))
         author_username = html_module.escape(tiktok_data.get("author_username", ""))
 
-        caption_lines = [f"🎵 <b>{author_nickname}</b>  👤 @{author_username}"]
+        caption_lines = [f"♫ <b>{author_nickname}</b>  👤 @{author_username}"]
         if raw_title:
             display_title = html_module.escape(raw_title)
             if len(display_title) > 300:
@@ -830,7 +830,7 @@ async def callback_mp3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                             audio=audio_bytes,
                             title=music_title,
                             performer=music_author,
-                            caption=f"🎵 <b>{music_title}</b> - {music_author}",
+                            caption=f"♫ <b>{music_title}</b> - {music_author}",
                             parse_mode=ParseMode.HTML,
                         )
                         sent = True
@@ -840,7 +840,7 @@ async def callback_mp3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             if not sent:
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"🎵 <b>MP3 Audio</b>\n♫ {music_title}\n\n<a href=\"{html_module.escape(music_url)}\">⬇️ Download MP3</a>",
+                    text=f"♫ <b>MP3 Audio</b>\n♫ {music_title}\n\n<a href=\"{html_module.escape(music_url)}\">⬇️ Download MP3</a>",
                     parse_mode=ParseMode.HTML,
                     disable_web_page_preview=True,
                 )
@@ -875,12 +875,12 @@ async def callback_shazam(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     msg = (
         f"◎ <b>Shazam - Music Detection</b>\n\n"
-        f"🎵 <b>Title:</b> {music_title}\n"
+        f"♫ <b>Title:</b> {music_title}\n"
         f"👤 <b>Artist:</b> {music_author}\n"
     )
 
     if music_url:
-        msg += f"\n<a href=\"{html_module.escape(music_url)}\">🎧 Dengarkan</a>"
+        msg += f"\n<a href=\"{html_module.escape(music_url)}\">☊ Dengarkan</a>"
 
     await query.message.reply_text(
         msg,
@@ -938,7 +938,7 @@ async def callback_preview(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                         await context.bot.send_video(
                             chat_id=chat_id,
                             video=v_bytes,
-                            caption=f"📺 <b>Video Preview</b>\n👤 @{html_module.escape(tiktok_data.get('author_username', ''))}",
+                            caption=f"▷ <b>Video Preview</b>\n👤 @{html_module.escape(tiktok_data.get('author_username', ''))}",
                             parse_mode=ParseMode.HTML,
                             supports_streaming=True,
                         )
@@ -949,14 +949,14 @@ async def callback_preview(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             if not sent:
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"📺 <b>Preview</b>\n\n<a href=\"{html_module.escape(play_url)}\">▶️ Tonton preview</a>\n🔗 <a href=\"{html_module.escape(original_url)}\">Link TikTok asli</a>",
+                    text=f"▷ <b>Preview</b>\n\n<a href=\"{html_module.escape(play_url)}\">▶️ Tonton preview</a>\n🔗 <a href=\"{html_module.escape(original_url)}\">Link TikTok asli</a>",
                     parse_mode=ParseMode.HTML,
                     disable_web_page_preview=False,
                 )
         else:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"📺 <b>Preview</b>\n\n🔗 <a href=\"{html_module.escape(original_url)}\">Buka di TikTok</a>",
+                text=f"▷ <b>Preview</b>\n\n🔗 <a href=\"{html_module.escape(original_url)}\">Buka di TikTok</a>",
                 parse_mode=ParseMode.HTML,
             )
     finally:
