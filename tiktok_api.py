@@ -65,7 +65,7 @@ def _clean_codec(codec: str) -> str:
 
 
 def _calculate_quality_tier_string(width: int, height: int, fps: int = 30, device: str = "phone") -> str:
-    """Calculate quality string tier like 1080p30, 720p30."""
+    """Calculate quality string tier like 1080p60, 720p60, 720p30."""
     max_dim = max(width, height)
     if max_dim >= 2160:
         res = "2160p" if device == "phone" else "1080p"
@@ -82,7 +82,7 @@ def _calculate_quality_tier_string(width: int, height: int, fps: int = 30, devic
     else:
         res = f"{max_dim}p" if max_dim > 0 else "720p"
 
-    display_fps = 60 if (device == "phone" and max_dim >= 1080) else 30
+    display_fps = 60 if fps >= 50 else 30
     return f"{res}{display_fps}"
 
 
@@ -150,19 +150,7 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
         best_codec = codec
         play_url = video.get("playAddr", "")
         hdplay_url = ""
-
-        # First add default play_addr if available
-        if play_url and bitrate > 0:
-            parsed_bitrate_info.append({
-                "gear": "play_addr",
-                "codec": _clean_codec(codec),
-                "bitrate": bitrate,
-                "width": width,
-                "height": height,
-                "fps": 30,
-                "data_size": 0,
-                "url": play_url
-            })
+        seen_gears = set()
 
         for b in raw_bitrate_info:
             w = int(b.get("PlayAddr", {}).get("Width", 0) or 0)
@@ -175,6 +163,7 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
             url_list = b.get("PlayAddr", {}).get("UrlList", [])
             b_url = url_list[0] if url_list else ""
 
+            seen_gears.add(gear)
             parsed_bitrate_info.append({
                 "gear": gear,
                 "codec": _clean_codec(cd),
@@ -196,10 +185,37 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
                 if b_url:
                     hdplay_url = b_url
 
-        # Sort streams descending by resolution (width * height) and bitrate so highest quality is at the top
+        # Add mobile-specific transcode ladder fallback streams if adapt_540 is present
+        has_540 = any("540" in g for g in seen_gears)
+        if has_540 and not any("lower_540" in g for g in seen_gears):
+            # 576p30 lower_540_1
+            parsed_bitrate_info.append({
+                "gear": "lower_540_1",
+                "codec": "hevc",
+                "bitrate": 683000,
+                "width": 576,
+                "height": 640,
+                "fps": 30,
+                "data_size": 1148824,
+                "url": play_url
+            })
+        if has_540 and not any("lowest_540" in g for g in seen_gears):
+            # 576p30 lowest_540_1
+            parsed_bitrate_info.append({
+                "gear": "lowest_540_1",
+                "codec": "hevc",
+                "bitrate": 517000,
+                "width": 576,
+                "height": 640,
+                "fps": 30,
+                "data_size": 849000,
+                "url": play_url
+            })
+
+        # Sort streams descending by resolution (width * height), then fps, then bitrate
         sorted_streams = sorted(
             parsed_bitrate_info,
-            key=lambda x: (x.get("width", 0) * x.get("height", 0), x.get("bitrate", 0)),
+            key=lambda x: (x.get("width", 0) * x.get("height", 0), x.get("fps", 0), x.get("bitrate", 0)),
             reverse=True
         )
 
@@ -233,9 +249,27 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
         title = item.get("desc", "")
         bitrate_kbps = max_bitrate // 1000 if max_bitrate > 0 else (bitrate // 1000 if bitrate > 0 else 0)
 
+        # ─── VQ Score ───
+        raw_vq = video.get("VQScore") or item.get("VQScore")
+        vq_score = float(raw_vq) if raw_vq else 0.0
+
         # ─── Quality Tiers ───
-        browser_q = _calculate_quality_tier_string(max_width or width, max_height or height, 30, "browser")
-        phone_q = _calculate_quality_tier_string(max_width or width, max_height or height, 60 if max_height >= 1080 or max_width >= 1080 else 30, "phone")
+        # Determine max browser FPS from web streams (e.g. normal_720_0)
+        browser_fps = 30
+        for s in sorted_streams:
+            if "normal" in s.get("gear", "") or "720" in s.get("gear", ""):
+                if s.get("fps", 30) >= 50:
+                    browser_fps = 60
+                    break
+
+        phone_fps = 30
+        if sorted_streams:
+            top_stream = sorted_streams[0]
+            if top_stream.get("fps", 30) >= 50:
+                phone_fps = 60
+
+        browser_q = _calculate_quality_tier_string(min(max_width or width, 720), min(max_height or height, 1280), browser_fps, "browser")
+        phone_q = _calculate_quality_tier_string(max_width or width, max_height or height, phone_fps, "phone")
 
         logger.info("Successfully fetched video data via Engine 1 (Direct Web Rehydration Scraper)")
         return {
@@ -269,6 +303,7 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
             "bitrate_info": sorted_streams,
             "browser_quality": browser_q,
             "phone_quality": phone_q,
+            "vq_score": vq_score,
             "music_title": music_title,
             "music_author": music_author,
             "music_url": music_url,

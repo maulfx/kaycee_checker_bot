@@ -9,8 +9,9 @@ def calculate_vq_score(
     width: int,
     height: int,
     bitrate_kbps: int,
-    codec: str,
-    fps: int
+    codec: str = "h264",
+    fps: int | float = 30,
+    **kwargs
 ) -> float:
     """
     Calculate Video Quality Score (0-100).
@@ -24,7 +25,22 @@ def calculate_vq_score(
     Returns:
         float: VQ Score rounded to 2 decimal places
     """
+    # Handle parameter swap if callers pass (w, h, br, fps, codec)
+    if isinstance(codec, (int, float)) and isinstance(fps, str):
+        codec, fps = fps, codec
+
+    try:
+        fps_num = float(fps)
+    except (ValueError, TypeError):
+        fps_num = 30.0
+
+    width = int(width or 0)
+    height = int(height or 0)
+    bitrate_kbps = int(bitrate_kbps or 0)
+    codec = str(codec or "h264")
+
     score = 0.0
+
     
     # ─── Resolution Score (max 30) ────────────────────────────
     total_pixels = width * height
@@ -43,7 +59,7 @@ def calculate_vq_score(
     # ─── Bitrate Efficiency Score (max 30) ────────────────────
     if bitrate_kbps > 0 and total_pixels > 0:
         # Calculate bits per pixel per frame (BPP)
-        bpp = (bitrate_kbps * 1000) / (total_pixels * max(fps, 1))
+        bpp = (bitrate_kbps * 1000) / (total_pixels * max(fps_num, 1.0))
         
         # Ideal BPP ranges for good quality
         # Low: <0.04 (heavy compression), Good: 0.04-0.12, Excellent: 0.12+
@@ -88,19 +104,19 @@ def calculate_vq_score(
     score += codec_score
     
     # ─── Frame Rate Score (max 20) ────────────────────────────
-    if fps >= 60:
+    if fps_num >= 60:
         fps_score = 20
-    elif fps >= 50:
+    elif fps_num >= 50:
         fps_score = 17
-    elif fps >= 30:
+    elif fps_num >= 30:
         fps_score = 14
-    elif fps >= 25:
+    elif fps_num >= 25:
         fps_score = 11
-    elif fps >= 24:
+    elif fps_num >= 24:
         fps_score = 9
-    elif fps >= 15:
+    elif fps_num >= 15:
         fps_score = 5
-    elif fps > 0:
+    elif fps_num > 0:
         fps_score = 2
     else:
         fps_score = 0

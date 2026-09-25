@@ -74,15 +74,15 @@ def _detect_shadow_ban(data: dict) -> str:
 
 
 def _format_bitrate_str(bps: int) -> str:
-    """Format bitrate into human-readable string (e.g. 2.7 MBps or 688 KBps)."""
-    kbps = bps // 1000
-    if kbps >= 1000:
-        return f"{kbps / 1000:.1f} MBps"
+    """Format bitrate into human-readable string (e.g. 4.3 MBps or 700 KBps)."""
+    if bps >= 1_000_000:
+        return f"{bps / 1_000_000:.1f} MBps"
+    kbps = round(bps / 1000)
     return f"{kbps} KBps"
 
 
 def _format_file_size_str(bytes_val: float) -> str:
-    """Format file size into human-readable string (e.g. 5.2 MB or 938.4 KB)."""
+    """Format file size into human-readable string (e.g. 5.4 MB or 829.1 KB)."""
     if bytes_val <= 0:
         return "Unknown"
     if bytes_val >= 1048576:
@@ -90,6 +90,26 @@ def _format_file_size_str(bytes_val: float) -> str:
     elif bytes_val >= 1024:
         return f"{bytes_val / 1024:.1f} KB"
     return f"{int(bytes_val)} B"
+
+
+def _get_stream_resolution_label(w: int, h: int, fps: int, gear: str = "") -> str:
+    """Format stream resolution label like 1080p60, 720p60, 576p30."""
+    base_dim = min(w, h) if (w > 0 and h > 0) else max(w, h)
+    if "1080" in gear or base_dim >= 1080:
+        res = "1080p"
+    elif "720" in gear or base_dim >= 720:
+        res = "720p"
+    elif "540" in gear or base_dim >= 540:
+        res = f"{base_dim}p" if base_dim > 0 else "576p"
+    elif "480" in gear or base_dim >= 480:
+        res = "480p"
+    elif "360" in gear or base_dim >= 360:
+        res = "360p"
+    else:
+        res = f"{base_dim}p" if base_dim > 0 else "720p"
+    
+    stream_fps = fps if fps > 0 else 30
+    return f"{res}{stream_fps}"
 
 
 def format_analysis_message(
@@ -133,14 +153,14 @@ def format_analysis_message(
     downloads = tiktok_data.get("downloads", 0)
     
     # Quality
-    orig_width = video_quality.get("width") or tiktok_data.get("width", 0)
-    orig_height = video_quality.get("height") or tiktok_data.get("height", 0)
+    orig_width = tiktok_data.get("width", 0) or video_quality.get("width", 0)
+    orig_height = tiktok_data.get("height", 0) or video_quality.get("height", 0)
     codec = video_quality.get("codec") or tiktok_data.get("codec", "h264")
     bitrate_kbps = video_quality.get("bitrate_kbps") or tiktok_data.get("bitrate_kbps", 0)
     fps = video_quality.get("fps", 30)
     file_size = video_quality.get("file_size_bytes") or tiktok_data.get("size", 0)
-    browser_q = video_quality.get("browser_quality") or tiktok_data.get("browser_quality", "720p30")
-    phone_q = video_quality.get("phone_quality") or tiktok_data.get("phone_quality", "1080p60")
+    browser_q = tiktok_data.get("browser_quality") or video_quality.get("browser_quality", "720p60")
+    phone_q = tiktok_data.get("phone_quality") or video_quality.get("phone_quality", "1080p60")
     
     bitrate_info = tiktok_data.get("bitrate_info", [])
     
@@ -153,6 +173,9 @@ def format_analysis_message(
     
     # Categories from hashtags
     categories = _infer_categories(hashtags)
+    
+    # VQ Score: Use exact score from TikTok if available
+    final_vq = tiktok_data.get("vq_score") or vq_score
     
     # ─── Build message ────────────────────────────────────────
     lines = []
@@ -195,13 +218,12 @@ def format_analysis_message(
     lines.append("")
     
     # ═══ QUALITY ═══
-    lines.append("⚙ <b>Quality</b>")
-    lines.append(f"  • 🌐 Browser ┃ {browser_q}")
-    lines.append(f"  • 📱 Phone ┃ {phone_q}")
+    lines.append("⭐ <b>Quality</b>")
+    lines.append(f"• 🌐 Browser | {browser_q}")
+    lines.append(f"• 📱 Phone | {phone_q}")
     
     # Dynamic Stream Quality Blockquote
-    lines.append("<blockquote>")
-    
+    quote_lines = []
     if bitrate_info:
         for b in bitrate_info:
             gear = b.get("gear", "")
@@ -219,31 +241,18 @@ def format_analysis_message(
 
             size_str = _format_file_size_str(b_size_bytes)
             bitrate_str = _format_bitrate_str(b_bitrate)
-            
-            max_d = max(b_w, b_h)
-            res_str = f"{max_d}p30"
-            if "lowest_1080" in gear or "1080" in gear or max_d >= 1080:
-                res_str = "1080p60" if ("lowest_1080" in gear or b_fps >= 50) else "1080p30"
-            elif "720" in gear or max_d >= 720:
-                res_str = "720p30"
-            elif "540" in gear or max_d >= 540:
-                res_str = "576p30"
+            res_str = _get_stream_resolution_label(b_w, b_h, b_fps, gear)
 
-            if gear == "play_addr":
-                if b_codec == "h264":
-                    header = "📱 play_addr 📱 play_addr_h264"
-                else:
-                    header = f"🌐 play_addr" if b_codec == "hevc" else f"📱 play_addr 📱 play_addr_{b_codec}"
-            elif gear == "normal_720_0":
-                header = "🌐 play_addr 🌐 normal_720_0"
-            elif "adapt_lowest_1080" in gear:
+            if "adapt_lowest_1080" in gear:
                 header = f"🌐 📱 {gear}"
+            elif "normal" in gear or gear == "play_addr":
+                header = "🌐 📱 play_addr 🌐 normal_720_0 📱 play_addr_h264"
             elif "adapt_lower_720" in gear:
                 header = f"🌐 📱 {gear}"
-            elif "lower_540" in gear:
-                header = f"🌐 📱 {gear}" if "lower_540_0" in gear else f"📱 {gear}"
             elif "adapt_540" in gear:
                 header = f"🌐 📱 {gear} 📱 play_addr_bytevc1"
+            elif "lower_540" in gear:
+                header = f"📱 {gear}"
             elif "lowest_540" in gear:
                 header = f"📱 {gear}"
             elif "lowest_480" in gear:
@@ -254,9 +263,9 @@ def format_analysis_message(
                 icon_str = "🌐 📱" if (is_web and is_phone) else ("🌐" if is_web else "📱")
                 header = f"{icon_str} {gear}"
 
-            lines.append(header)
-            lines.append(f"{res_str} • {bitrate_str} • {b_codec} • {size_str}")
-            lines.append("")
+            quote_lines.append(header)
+            quote_lines.append(f"{res_str} • {bitrate_str} • {b_codec} • {size_str}")
+            quote_lines.append("")
     else:
         max_d = max(orig_width, orig_height)
         res_str = f"{max_d}p30" if max_d > 0 else "720p30"
@@ -264,16 +273,18 @@ def format_analysis_message(
         size_bytes = (bitrate_kbps * 1000 / 8.0) * duration if duration > 0 else file_size
         size_str = _format_file_size_str(size_bytes)
         
-        lines.append(f"📱 play_addr 📱 play_addr_{codec}")
-        lines.append(f"{res_str} • {bitrate_str} • {codec} • {size_str}")
-        lines.append("")
+        quote_lines.append(f"📱 play_addr 📱 play_addr_{codec}")
+        quote_lines.append(f"{res_str} • {bitrate_str} • {codec} • {size_str}")
+        quote_lines.append("")
 
-    lines.append("</blockquote>")
-    lines.append("")
+    if quote_lines and quote_lines[-1] == "":
+        quote_lines.pop()
+
+    lines.append("<blockquote>" + "\n".join(quote_lines) + "</blockquote>")
     
     if orig_width > 0 and orig_height > 0:
-        lines.append(f"| Original ┃ {orig_width}x{orig_height}")
-    lines.append(f"| VQ Score ┃ {vq_score}")
+        lines.append(f"| Original | {orig_width}x{orig_height}")
+    lines.append(f"| VQ Score | {final_vq}")
     lines.append("")
     
     # ═══ CATEGORIES ═══
