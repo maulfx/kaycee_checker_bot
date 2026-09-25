@@ -152,6 +152,20 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
         hdplay_url = ""
         seen_gears = set()
 
+        # Add play_addr / play_addr_h264 stream if play_url exists
+        if play_url:
+            parsed_bitrate_info.append({
+                "gear": "play_addr",
+                "codec": _clean_codec(codec or "h264"),
+                "bitrate": bitrate,
+                "width": width,
+                "height": height,
+                "fps": 30,
+                "data_size": int((bitrate / 8.0) * duration) if (bitrate > 0 and duration > 0) else 0,
+                "url": play_url
+            })
+            seen_gears.add("play_addr")
+
         for b in raw_bitrate_info:
             w = int(b.get("PlayAddr", {}).get("Width", 0) or 0)
             h = int(b.get("PlayAddr", {}).get("Height", 0) or 0)
@@ -185,31 +199,44 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
                 if b_url:
                     hdplay_url = b_url
 
-        # Add mobile-specific transcode ladder fallback streams if adapt_540 is present
+        # Add mobile-specific transcode ladder fallback streams if 540p stream is present
         has_540 = any("540" in g for g in seen_gears)
-        if has_540 and not any("lower_540" in g for g in seen_gears):
+        adapt_540_url = next((b["url"] for b in parsed_bitrate_info if "540" in b["gear"] and b["url"]), play_url)
+        if has_540 and not any("lower_540_1" in g for g in seen_gears):
             # 576p30 lower_540_1
             parsed_bitrate_info.append({
                 "gear": "lower_540_1",
                 "codec": "hevc",
-                "bitrate": 683000,
-                "width": 576,
-                "height": 640,
+                "bitrate": 451000,
+                "width": 626 if width > height else 576,
+                "height": 576 if width > height else 640,
                 "fps": 30,
-                "data_size": 1148824,
-                "url": play_url
+                "data_size": int((451000 / 8.0) * duration) if duration > 0 else 918500,
+                "url": adapt_540_url
             })
-        if has_540 and not any("lowest_540" in g for g in seen_gears):
+        if has_540 and not any("lowest_540_1" in g for g in seen_gears):
             # 576p30 lowest_540_1
             parsed_bitrate_info.append({
                 "gear": "lowest_540_1",
                 "codec": "hevc",
-                "bitrate": 517000,
-                "width": 576,
-                "height": 640,
+                "bitrate": 295000,
+                "width": 626 if width > height else 576,
+                "height": 576 if width > height else 640,
                 "fps": 30,
-                "data_size": 849000,
-                "url": play_url
+                "data_size": int((295000 / 8.0) * duration) if duration > 0 else 600400,
+                "url": adapt_540_url
+            })
+        if has_540 and not any("lowest_480_1" in g for g in seen_gears):
+            # 480p30 lowest_480_1
+            parsed_bitrate_info.append({
+                "gear": "lowest_480_1",
+                "codec": "hevc",
+                "bitrate": 248000,
+                "width": 522 if width > height else 480,
+                "height": 480 if width > height else 534,
+                "fps": 30,
+                "data_size": int((248000 / 8.0) * duration) if duration > 0 else 505900,
+                "url": adapt_540_url
             })
 
         # Sort streams descending by resolution (width * height), then fps, then bitrate

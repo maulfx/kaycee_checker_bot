@@ -233,6 +233,7 @@ def format_analysis_message(
             b_h = b.get("height", 0)
             b_fps = b.get("fps", 30)
             b_data_size = float(b.get("data_size", 0) or 0)
+            b_url = b.get("url", "")
             
             if b_data_size <= 0 and duration > 0 and b_bitrate > 0:
                 b_size_bytes = (b_bitrate / 8.0) * duration
@@ -243,25 +244,34 @@ def format_analysis_message(
             bitrate_str = _format_bitrate_str(b_bitrate)
             res_str = _get_stream_resolution_label(b_w, b_h, b_fps, gear)
 
+            def _link(name: str) -> str:
+                if b_url:
+                    return f'<a href="{html.escape(b_url)}">{name}</a>'
+                return name
+
             if "adapt_lowest_1080" in gear:
-                header = f"🌐 📱 {gear}"
-            elif "normal" in gear or gear == "play_addr":
-                header = "🌐 📱 play_addr 🌐 normal_720_0 📱 play_addr_h264"
+                header = f"🌐 📱 {_link(gear)}"
+            elif gear == "play_addr":
+                header = f"📱 {_link('play_addr')} 📱 {_link('play_addr_h264')}"
+            elif "normal" in gear:
+                header = f"🌐 📱 {_link('play_addr')} 🌐 {_link('normal_720_0')} 📱 {_link('play_addr_h264')}"
             elif "adapt_lower_720" in gear:
-                header = f"🌐 📱 {gear}"
+                header = f"🌐 📱 {_link(gear)}"
+            elif "lower_540_0" in gear:
+                header = f"🌐 {_link(gear)}"
             elif "adapt_540" in gear:
-                header = f"🌐 📱 {gear} 📱 play_addr_bytevc1"
+                header = f"🌐 📱 {_link(gear)} 📱 {_link('play_addr_bytevc1')}"
             elif "lower_540" in gear:
-                header = f"📱 {gear}"
+                header = f"📱 {_link(gear)}"
             elif "lowest_540" in gear:
-                header = f"📱 {gear}"
+                header = f"📱 {_link(gear)}"
             elif "lowest_480" in gear:
-                header = f"📱 {gear}"
+                header = f"📱 {_link(gear)}"
             else:
                 is_web = "normal" in gear or "720" in gear or "adapt" in gear
                 is_phone = "adapt" in gear or "lower" in gear or "lowest" in gear or "540" in gear or "1080" in gear or "play_addr" in gear
                 icon_str = "🌐 📱" if (is_web and is_phone) else ("🌐" if is_web else "📱")
-                header = f"{icon_str} {gear}"
+                header = f"{icon_str} {_link(gear)}"
 
             quote_lines.append(header)
             quote_lines.append(f"{res_str} • {bitrate_str} • {b_codec} • {size_str}")
@@ -272,8 +282,14 @@ def format_analysis_message(
         bitrate_str = _format_bitrate_str(bitrate_kbps * 1000)
         size_bytes = (bitrate_kbps * 1000 / 8.0) * duration if duration > 0 else file_size
         size_str = _format_file_size_str(size_bytes)
+        play_url = tiktok_data.get("play_url", "")
         
-        quote_lines.append(f"📱 play_addr 📱 play_addr_{codec}")
+        def _link_raw(name: str) -> str:
+            if play_url:
+                return f'<a href="{html.escape(play_url)}">{name}</a>'
+            return name
+        
+        quote_lines.append(f"📱 {_link_raw('play_addr')} 📱 {_link_raw(f'play_addr_{codec}')}")
         quote_lines.append(f"{res_str} • {bitrate_str} • {codec} • {size_str}")
         quote_lines.append("")
 
