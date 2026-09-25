@@ -181,7 +181,7 @@ def format_analysis_message(
     lines = []
     
     # ═══ HEADER (Author & Date) ═══
-    lines.append(f"♫ <b>{nickname}</b>  ◷ {formatted_date}")
+    lines.append(f"🎵 <b>{nickname}</b>  🗓 {formatted_date}")
     
     # Title wrapped in blockquote
     if title:
@@ -190,7 +190,7 @@ def format_analysis_message(
     
     # Music info
     if music_title:
-        music_display = f"☊ {music_title}"
+        music_display = f"🎧 {music_title}"
         if duration:
             music_display += f" • {_format_duration(duration)}"
         lines.append(music_display)
@@ -198,27 +198,27 @@ def format_analysis_message(
     lines.append("")
     
     # ═══ STATISTICS ═══
-    lines.append("◈ <b>Statistics</b>")
-    lines.append(f"• ◎ <b>{_format_number(views)}</b> Views")
-    lines.append(f"• ♡ <b>{_format_number(likes)}</b> Likes")
+    lines.append("📊 <b>Statistics</b>")
+    lines.append(f"• 👁 <b>{_format_number(views)}</b> Views")
+    lines.append(f"• 🤍 <b>{_format_number(likes)}</b> Likes")
     lines.append(f"• 💬 <b>{_format_number(comments)}</b> Comments")
-    lines.append(f"• ⚲ <b>{_format_number(favorites)}</b> Favorites")
-    lines.append(f"• ➦ <b>{_format_number(shares)}</b> Shares")
-    lines.append(f"• ⤓ <b>{_format_number(downloads)}</b> Downloads")
+    lines.append(f"• 🔖 <b>{_format_number(favorites)}</b> Favorites")
+    lines.append(f"• ↗️ <b>{_format_number(shares)}</b> Shares")
+    lines.append(f"• 📥 <b>{_format_number(downloads)}</b> Downloads")
     lines.append("")
     
     # ═══ INFORMATION ═══
-    lines.append("◈ <b>Information</b>")
-    lines.append(f"• ⌗ ID | <code>{video_id}</code>")
-    lines.append(f"• ⤓ Source | {source}")
-    lines.append(f"• ⚲ Region | {region_flag} {region_name}")
-    lines.append(f"• 👻 Shadow ban | {shadow_ban}")
+    lines.append("📋 <b>Information</b>")
+    lines.append(f"• 🆔 ID | <code>{video_id}</code>")
+    lines.append(f"• 📥 Source | {source}")
+    lines.append(f"• 📍 Region | {region_flag} {region_name}")
+    lines.append(f"• 🛡️ Shadow ban | {shadow_ban}")
     if tiktok_data.get("is_ad"):
         lines.append(f"• 📢 Ad | Yes")
     lines.append("")
     
     # ═══ QUALITY ═══
-    lines.append("✦ <b>Quality</b>")
+    lines.append("✨ <b>Quality</b>")
     lines.append(f"• 🌐 Browser | {browser_q}")
     lines.append(f"• 📱 Phone | {phone_q}")
     
@@ -305,7 +305,7 @@ def format_analysis_message(
     
     # ═══ CATEGORIES ═══
     if categories:
-        lines.append("✦ <b>Categories</b>")
+        lines.append("🏷️ <b>Categories</b>")
         for cat in categories:
             lines.append(f"• {cat}")
     

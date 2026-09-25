@@ -477,7 +477,42 @@ def _extract_tiktok_ytdlp_sync(url: str) -> dict | None:
             }
     except Exception as e:
         logger.warning(f"yt-dlp engine extraction failed: {e}")
-        return None
+def _enrich_stats_with_tikwm(data: dict, url: str) -> dict:
+    """
+    Enrich data with exact live unrounded statistics and real download_count from TikWM API.
+    TikTok Web returns numbers rounded to hundreds/thousands and omits download count.
+    """
+    try:
+        r = httpx.post(
+            TIKWM_API_URL,
+            data={"url": url, "count": 12, "cursor": 0, "web": 1, "hd": 1},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "application/json",
+            },
+            timeout=8.0
+        )
+        if r.status_code == 200:
+            res = r.json()
+            if res.get("code") == 0 and res.get("data"):
+                d = res.get("data", {})
+                if d.get("play_count") is not None:
+                    data["views"] = int(d.get("play_count", 0) or 0)
+                if d.get("digg_count") is not None:
+                    data["likes"] = int(d.get("digg_count", 0) or 0)
+                if d.get("comment_count") is not None:
+                    data["comments"] = int(d.get("comment_count", 0) or 0)
+                if d.get("collect_count") is not None:
+                    data["favorites"] = int(d.get("collect_count", 0) or 0)
+                if d.get("share_count") is not None:
+                    data["shares"] = int(d.get("share_count", 0) or 0)
+                if d.get("download_count") is not None:
+                    data["downloads"] = int(d.get("download_count", 0) or 0)
+                if not data.get("music_url") and d.get("music_info", {}).get("play"):
+                    data["music_url"] = d.get("music_info", {}).get("play")
+    except Exception as e:
+        logger.debug(f"Failed to enrich stats with TikWM: {e}")
+    return data
 
 
 async def fetch_tiktok_data(url: str) -> dict | None:
@@ -489,6 +524,11 @@ async def fetch_tiktok_data(url: str) -> dict | None:
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(None, _scrape_tiktok_web_sync, url)
         if data and data.get("id"):
+            # Enrich with exact live statistics and download count
+            try:
+                data = await loop.run_in_executor(None, _enrich_stats_with_tikwm, data, url)
+            except Exception as e:
+                logger.debug(f"Enrichment exception: {e}")
             return data
     except Exception as e:
         logger.warning(f"Engine 1 execution failed: {e}")
@@ -498,6 +538,10 @@ async def fetch_tiktok_data(url: str) -> dict | None:
         loop = asyncio.get_running_loop()
         ytdlp_data = await loop.run_in_executor(None, _extract_tiktok_ytdlp_sync, url)
         if ytdlp_data and ytdlp_data.get("id"):
+            try:
+                ytdlp_data = await loop.run_in_executor(None, _enrich_stats_with_tikwm, ytdlp_data, url)
+            except Exception as e:
+                logger.debug(f"yt-dlp enrichment exception: {e}")
             return ytdlp_data
     except Exception as e:
         logger.warning(f"yt-dlp engine failed: {e}")
