@@ -285,23 +285,25 @@ async def analyze_video(video_url: str, fallback_data: dict = None) -> dict:
 
 
 def _calculate_quality_tier(width: int, height: int, fps: int = 30, device: str = "phone") -> str:
-    """Calculate display quality tier string (e.g., '1080p60', '720p60')."""
-    max_dim = max(width, height)
+    """Calculate display quality tier string (e.g., '1080p60', '720p60') based on short side resolution."""
+    base_dim = min(width, height) if (width > 0 and height > 0) else max(width, height)
     
-    if max_dim >= 2160:
+    if base_dim >= 2160:
         res = "2160p"
-    elif max_dim >= 1440:
+    elif base_dim >= 1440:
         res = "1440p"
-    elif max_dim >= 1080:
+    elif base_dim >= 1080:
         res = "1080p"
-    elif max_dim >= 720:
+    elif base_dim >= 720:
         res = "720p"
-    elif max_dim >= 480:
+    elif base_dim >= 540:
+        res = f"{base_dim}p" if base_dim in (540, 576) else "576p"
+    elif base_dim >= 480:
         res = "480p"
-    elif max_dim >= 360:
+    elif base_dim >= 360:
         res = "360p"
     else:
-        res = f"{max_dim}p" if max_dim > 0 else "Unknown"
+        res = f"{base_dim}p" if base_dim > 0 else "Unknown"
     
     display_fps = 60 if fps >= 50 else 30
     return f"{res}{display_fps}" if res != "Unknown" else "Unknown"
