@@ -374,6 +374,78 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
 
 
+async def _download_tiktok_video_bytes(orig_url: str, fallback_url: str = "", quality: str = "best") -> bytes | None:
+    """
+    Robust video downloader using TikWM API + direct headers + yt-dlp fallback to bypass TikTok 403 CDN errors.
+    """
+    # 1. Try TikWM API first (fastest)
+    if orig_url:
+        try:
+            async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+                r = await client.post("https://www.tikwm.com/api/", data={"url": orig_url, "hd": 1})
+                if r.status_code == 200:
+                    data = r.json().get("data", {})
+                    dl_url = data.get("hdplay") or data.get("play")
+                    if dl_url:
+                        if dl_url.startswith("/"):
+                            dl_url = "https://www.tikwm.com" + dl_url
+                        r_vid = await client.get(dl_url, headers={"User-Agent": "Mozilla/5.0"})
+                        if r_vid.status_code == 200 and len(r_vid.content) > 1000:
+                            return r_vid.content
+        except Exception as e:
+            logger.debug(f"TikWM video buffer download error: {e}")
+
+    # 2. Try direct download if fallback_url provided with proper headers
+    if fallback_url:
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+                "Referer": "https://www.tiktok.com/",
+            }
+            async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+                resp = await client.get(fallback_url, headers=headers)
+                if resp.status_code == 200 and len(resp.content) > 1000:
+                    return resp.content
+        except Exception as e:
+            logger.debug(f"Direct stream download error: {e}")
+
+    # 3. Fallback to yt-dlp
+    if orig_url:
+        try:
+            import yt_dlp
+            import tempfile
+            import os
+            loop = asyncio.get_running_loop()
+            def _ytdlp_dl():
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    outpath = os.path.join(tmpdir, "vid.mp4")
+                    format_opt = "best"
+                    if quality == "720":
+                        format_opt = "best[height<=720]/best"
+                    elif quality == "540":
+                        format_opt = "best[height<=576]/best"
+
+                    ydl_opts = {
+                        "quiet": True,
+                        "no_warnings": True,
+                        "outtmpl": outpath,
+                        "format": format_opt,
+                    }
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([orig_url])
+                    if os.path.exists(outpath):
+                        with open(outpath, "rb") as f:
+                            return f.read()
+                return None
+            res = await loop.run_in_executor(None, _ytdlp_dl)
+            if res:
+                return res
+        except Exception as e:
+            logger.warning(f"yt-dlp video buffer download error: {e}")
+
+    return None
+
+
 # ─── Callback: Check (Full Analysis) ─────────────────────────
 async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle Check button - delete previous menu, run video quality analysis, send analysis text and video file."""
@@ -399,6 +471,7 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     try:
+        orig_url = tiktok_data.get("original_url", "")
         # Determine the highest resolution stream URL
         bitrate_info = tiktok_data.get("bitrate_info", [])
         best_url = ""
@@ -436,31 +509,25 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
 
         # 2. Download and send the highest resolution video file
-        if best_url:
+        raw_bytes = await _download_tiktok_video_bytes(orig_url, fallback_url=best_url, quality="best")
+        if raw_bytes:
             try:
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
-                    "Referer": "https://www.tiktok.com/",
-                }
-                async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
-                    resp = await client.get(best_url, headers=headers)
-                    if resp.status_code == 200 and len(resp.content) > 1000:
-                        from io import BytesIO
-                        video_bytes = BytesIO(resp.content)
-                        video_bytes.name = f"{video_id}_{final_width}x{final_height}.mp4"
-                        
-                        top_res_label = f"{final_width}x{final_height}"
-                        vid_caption = f"🎬 <b>{html_module.escape(tiktok_data.get('author_nickname', 'Video'))}</b> • {top_res_label} ({final_fps}fps • {final_codec})"
-                        
-                        await context.bot.send_video(
-                            chat_id=chat_id,
-                            video=video_bytes,
-                            caption=vid_caption,
-                            parse_mode=ParseMode.HTML,
-                            width=final_width if final_width > 0 else None,
-                            height=final_height if final_height > 0 else None,
-                            supports_streaming=True,
-                        )
+                from io import BytesIO
+                video_bytes = BytesIO(raw_bytes)
+                video_bytes.name = f"{video_id}_{final_width}x{final_height}.mp4"
+                
+                top_res_label = f"{final_width}x{final_height}"
+                vid_caption = f"🎬 <b>{html_module.escape(tiktok_data.get('author_nickname', 'Video'))}</b> • {top_res_label} ({final_fps}fps • {final_codec})"
+                
+                await context.bot.send_video(
+                    chat_id=chat_id,
+                    video=video_bytes,
+                    caption=vid_caption,
+                    parse_mode=ParseMode.HTML,
+                    width=final_width if final_width > 0 else None,
+                    height=final_height if final_height > 0 else None,
+                    supports_streaming=True,
+                )
             except Exception as vid_err:
                 logger.warning(f"Failed to send highest resolution video stream: {vid_err}")
 
@@ -510,6 +577,7 @@ async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         )
         return
 
+    orig_url = tiktok_data.get("original_url", "")
     # Find the appropriate download URL
     download_url = ""
     target_stream = None
@@ -548,39 +616,35 @@ async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     w = target_stream.get("width", 0) if target_stream else tiktok_data.get("width", 0)
     h = target_stream.get("height", 0) if target_stream else tiktok_data.get("height", 0)
 
-    if download_url:
-        sent = False
+    raw_bytes = await _download_tiktok_video_bytes(orig_url, fallback_url=download_url, quality=quality)
+    if raw_bytes:
         try:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
-                "Referer": "https://www.tiktok.com/",
-            }
-            async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
-                resp = await client.get(download_url, headers=headers)
-                if resp.status_code == 200 and len(resp.content) > 1000:
-                    from io import BytesIO
-                    v_bytes = BytesIO(resp.content)
-                    v_bytes.name = f"TikTok_{label}_{video_id}.mp4"
-                    await context.bot.send_video(
-                        chat_id=chat_id,
-                        video=v_bytes,
-                        caption=f"📥 <b>TikTok Video ({label})</b>\n👤 @{html_module.escape(tiktok_data.get('author_username', ''))}",
-                        parse_mode=ParseMode.HTML,
-                        width=w if w > 0 else None,
-                        height=h if h > 0 else None,
-                        supports_streaming=True,
-                    )
-                    sent = True
+            from io import BytesIO
+            v_bytes = BytesIO(raw_bytes)
+            v_bytes.name = f"TikTok_{label}_{video_id}.mp4"
+            await context.bot.send_video(
+                chat_id=chat_id,
+                video=v_bytes,
+                caption=f"📥 <b>TikTok Video ({label})</b>\n👤 @{html_module.escape(tiktok_data.get('author_username', ''))}",
+                parse_mode=ParseMode.HTML,
+                width=w if w > 0 else None,
+                height=h if h > 0 else None,
+                supports_streaming=True,
+            )
         except Exception as err:
             logger.warning(f"Failed to send video bytes for download: {err}")
-
-        if not sent:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"📥 <b>Download {label}</b>\n\n<a href=\"{html_module.escape(download_url)}\">⬇️ Click here to download</a>",
+                text=f"❌ Gagal mengirim video file {label}.",
                 parse_mode=ParseMode.HTML,
-                disable_web_page_preview=True,
             )
+    elif download_url:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"📥 <b>Download {label}</b>\n\n<a href=\"{html_module.escape(download_url)}\">⬇️ Click here to download</a>",
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
     else:
         await context.bot.send_message(
             chat_id=chat_id,
