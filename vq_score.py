@@ -126,32 +126,57 @@ def calculate_vq_score(
     return round(min(score, 100), 2)
 
 
+def calculate_compression_score(
+    width: int,
+    height: int,
+    bitrate_kbps: int,
+    codec: str = "h264",
+    fps: int | float = 30,
+    raw_vq: float = 0.0,
+    **kwargs
+) -> float:
+    """
+    Calculate Video Compression / Distortion Score (0-100).
+    0 = No Compress (Lossless / Pristine Original Quality).
+    Higher score = More compression.
+    """
+    if raw_vq > 0:
+        comp = max(0.0, min(100.0, 100.0 - raw_vq))
+        return round(comp, 2)
+        
+    quality_score = calculate_vq_score(width, height, bitrate_kbps, codec, fps)
+    comp = max(0.0, min(100.0, 100.0 - quality_score))
+    return round(comp, 2)
+
+
 def get_vq_grade(score: float) -> str:
-    """Convert VQ Score to a letter grade with emoji."""
-    if score >= 90:
-        return "🟢 Excellent (A+)"
-    elif score >= 80:
-        return "🟢 Very Good (A)"
-    elif score >= 70:
-        return "🟡 Good (B)"
-    elif score >= 60:
+    """
+    Convert Compression VQ Score to grade (0 = No Compress).
+    """
+    if score <= 10:
+        return "🟢 No Compress (Lossless / A+)"
+    elif score <= 20:
+        return "🟢 Low Compression (A)"
+    elif score <= 35:
+        return "🟡 Moderate (B)"
+    elif score <= 50:
         return "🟡 Fair (C)"
-    elif score >= 50:
-        return "🟠 Below Average (D)"
-    elif score >= 40:
-        return "🔴 Poor (E)"
+    elif score <= 65:
+        return "🟠 Compressed (D)"
     else:
-        return "🔴 Very Poor (F)"
+        return "🔴 Heavy Compression (F)"
 
 
 def get_vq_bar(score: float, length: int = 10) -> str:
-    """Create a visual progress bar for VQ Score."""
-    filled = round(score / 100 * length)
+    """Create a visual progress bar for Compression Score (0 = No Compress)."""
+    # Inverse filling: 0 score = 10 green bars
+    quality = max(0, min(100, 100 - score))
+    filled = round(quality / 100 * length)
     empty = length - filled
     
-    if score >= 70:
+    if score <= 25:
         fill_char = "🟩"
-    elif score >= 50:
+    elif score <= 50:
         fill_char = "🟨"
     else:
         fill_char = "🟥"

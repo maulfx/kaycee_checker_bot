@@ -300,7 +300,21 @@ def format_analysis_message(
     
     if orig_width > 0 and orig_height > 0:
         lines.append(f"| Original | {orig_width}x{orig_height}")
-    lines.append(f"| VQ Score | {final_vq}")
+    
+    # Format VQ Score where 0 = No Compress (Lossless / Pristine Quality)
+    raw_vq = float(tiktok_data.get("vq_score") or vq_score or 0.0)
+    if raw_vq > 0:
+        comp_score = max(0.0, round(100.0 - raw_vq, 2))
+    else:
+        calc_q = float(video_quality.get("vq_score") or 70.0)
+        comp_score = max(0.0, round(100.0 - calc_q, 2))
+
+    if comp_score <= 0.5:
+        vq_display = "0 (No Compress)"
+    else:
+        vq_display = f"{comp_score:.2f}"
+
+    lines.append(f"| VQ Score | {vq_display}")
     lines.append("")
     
     # ═══ CATEGORIES ═══
