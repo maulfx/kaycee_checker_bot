@@ -376,15 +376,24 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 # ─── Callback: Check (Full Analysis) ─────────────────────────
 async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle Check button - run video quality analysis, send analysis text and video file."""
+    """Handle Check button - delete previous menu, run video quality analysis, send analysis text and video file."""
     query = update.callback_query
     await query.answer("🔍 Checking video quality...")
 
     video_id = query.data.replace("check_", "", 1)
     tiktok_data = context.bot_data.get("video_cache", {}).get(video_id)
+    chat_id = query.message.chat_id
+
+    # Delete previous menu message
+    try:
+        await query.message.delete()
+    except Exception as del_err:
+        logger.debug(f"Could not delete previous message: {del_err}")
+
     if not tiktok_data:
-        await query.message.reply_text(
-            "❌ Video data not found. Please resend the TikTok link.",
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="❌ Video data not found. Please resend the TikTok link.",
             parse_mode=ParseMode.HTML,
         )
         return
@@ -393,18 +402,20 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # Determine the highest resolution stream URL
         bitrate_info = tiktok_data.get("bitrate_info", [])
         best_url = ""
+        best_stream = None
         if bitrate_info:
-            best_url = bitrate_info[0].get("url", "")
+            best_stream = bitrate_info[0]
+            best_url = best_stream.get("url", "")
         if not best_url:
             best_url = tiktok_data.get("hdplay_url") or tiktok_data.get("play_url", "")
 
         video_quality = await analyze_video(best_url, fallback_data=tiktok_data)
 
-        final_width = video_quality.get("width") or tiktok_data.get("width", 0)
-        final_height = video_quality.get("height") or tiktok_data.get("height", 0)
-        final_bitrate = video_quality.get("bitrate_kbps") or tiktok_data.get("bitrate_kbps", 0)
-        final_codec = video_quality.get("codec") or tiktok_data.get("codec", "h264")
-        final_fps = video_quality.get("fps", 30)
+        final_width = (best_stream.get("width") if best_stream else 0) or video_quality.get("width") or tiktok_data.get("width", 0)
+        final_height = (best_stream.get("height") if best_stream else 0) or video_quality.get("height") or tiktok_data.get("height", 0)
+        final_bitrate = (best_stream.get("bitrate", 0) // 1000 if best_stream else 0) or video_quality.get("bitrate_kbps") or tiktok_data.get("bitrate_kbps", 0)
+        final_codec = (best_stream.get("codec") if best_stream else "") or video_quality.get("codec") or tiktok_data.get("codec", "h264")
+        final_fps = (best_stream.get("fps") if best_stream else 0) or video_quality.get("fps", 30)
 
         vq = calculate_vq_score(
             width=final_width,
@@ -417,8 +428,9 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         message = format_analysis_message(tiktok_data, video_quality, vq)
 
         # 1. Send the full analysis message
-        await query.message.reply_text(
-            message,
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=message,
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
         )
@@ -440,12 +452,14 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                         top_res_label = f"{final_width}x{final_height}"
                         vid_caption = f"🎬 <b>{html_module.escape(tiktok_data.get('author_nickname', 'Video'))}</b> • {top_res_label} ({final_fps}fps • {final_codec})"
                         
-                        await query.message.reply_video(
+                        await context.bot.send_video(
+                            chat_id=chat_id,
                             video=video_bytes,
                             caption=vid_caption,
                             parse_mode=ParseMode.HTML,
                             width=final_width if final_width > 0 else None,
                             height=final_height if final_height > 0 else None,
+                            supports_streaming=True,
                         )
             except Exception as vid_err:
                 logger.warning(f"Failed to send highest resolution video stream: {vid_err}")
@@ -460,17 +474,18 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         error_msg = html_module.escape(str(e))
         if len(error_msg) > 200:
             error_msg = error_msg[:197] + "..."
-        await query.message.reply_text(
-            f"❌ <b>An error occurred during analysis</b>\n\n"
-            f"<code>{error_msg}</code>",
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"❌ <b>An error occurred during analysis</b>\n\n<code>{error_msg}</code>",
             parse_mode=ParseMode.HTML,
         )
 
 
 # ─── Callback: Download Video ────────────────────────────────
 async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle download buttons (540p, 720p, 1080p, original) - send actual video file."""
+    """Handle download buttons (540p, 720p, 1080p, original) - delete menu and send in-app playable video."""
     query = update.callback_query
+    chat_id = query.message.chat_id
 
     # Parse callback data
     data = query.data  # e.g. "dl_540_{video_id}", "dl_orig_{video_id}"
@@ -480,38 +495,49 @@ async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     await query.answer(f"📥 Downloading {quality} video...")
 
+    # Delete previous menu message
+    try:
+        await query.message.delete()
+    except Exception as del_err:
+        logger.debug(f"Could not delete previous message: {del_err}")
+
     tiktok_data = context.bot_data.get("video_cache", {}).get(video_id)
     if not tiktok_data:
-        await query.message.reply_text(
-            "❌ Video data not found. Please resend the TikTok link.",
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="❌ Video data not found. Please resend the TikTok link.",
             parse_mode=ParseMode.HTML,
         )
         return
 
     # Find the appropriate download URL
     download_url = ""
+    target_stream = None
     bitrate_info = tiktok_data.get("bitrate_info", [])
 
     if quality == "orig":
-        download_url = tiktok_data.get("hdplay_url") or tiktok_data.get("play_url", "")
+        if bitrate_info:
+            target_stream = bitrate_info[0]
+            download_url = target_stream.get("url", "")
+        if not download_url:
+            download_url = tiktok_data.get("hdplay_url") or tiktok_data.get("play_url", "")
     else:
         target_res = int(quality)
-        best_match = None
         for stream in bitrate_info:
             max_dim = max(stream.get("width", 0), stream.get("height", 0))
             gear = stream.get("gear", "")
             if target_res >= 1080 and (max_dim >= 1080 or "1080" in gear):
-                best_match = stream
+                target_stream = stream
                 break
             elif target_res >= 720 and (max_dim >= 720 or "720" in gear) and max_dim < 1080 and "1080" not in gear:
-                best_match = stream
+                target_stream = stream
                 break
             elif target_res >= 480 and (max_dim >= 480 or "540" in gear) and max_dim < 720 and "720" not in gear:
-                best_match = stream
+                target_stream = stream
                 break
 
-        if best_match and best_match.get("url"):
-            download_url = best_match["url"]
+        if target_stream and target_stream.get("url"):
+            download_url = target_stream["url"]
         else:
             if target_res >= 1080:
                 download_url = tiktok_data.get("hdplay_url") or tiktok_data.get("play_url", "")
@@ -519,67 +545,113 @@ async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 download_url = tiktok_data.get("play_url") or tiktok_data.get("hdplay_url", "")
 
     label = "Original" if quality == "orig" else f"{quality}p"
+    w = target_stream.get("width", 0) if target_stream else tiktok_data.get("width", 0)
+    h = target_stream.get("height", 0) if target_stream else tiktok_data.get("height", 0)
+
     if download_url:
         sent = False
         try:
-            async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-                resp = await client.get(download_url, headers={"User-Agent": "Mozilla/5.0"})
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+                "Referer": "https://www.tiktok.com/",
+            }
+            async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+                resp = await client.get(download_url, headers=headers)
                 if resp.status_code == 200 and len(resp.content) > 1000:
                     from io import BytesIO
                     v_bytes = BytesIO(resp.content)
                     v_bytes.name = f"TikTok_{label}_{video_id}.mp4"
-                    await query.message.reply_video(
+                    await context.bot.send_video(
+                        chat_id=chat_id,
                         video=v_bytes,
                         caption=f"📥 <b>TikTok Video ({label})</b>\n👤 @{html_module.escape(tiktok_data.get('author_username', ''))}",
                         parse_mode=ParseMode.HTML,
+                        width=w if w > 0 else None,
+                        height=h if h > 0 else None,
+                        supports_streaming=True,
                     )
                     sent = True
         except Exception as err:
             logger.warning(f"Failed to send video bytes for download: {err}")
 
         if not sent:
-            await query.message.reply_text(
-                f"📥 <b>Download {label}</b>\n\n"
-                f"<a href=\"{html_module.escape(download_url)}\">⬇️ Click here to download</a>",
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"📥 <b>Download {label}</b>\n\n<a href=\"{html_module.escape(download_url)}\">⬇️ Click here to download</a>",
                 parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True,
             )
     else:
-        await query.message.reply_text(
-            f"❌ Download URL for {label} is unavailable.",
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"❌ Download URL for {label} is unavailable.",
             parse_mode=ParseMode.HTML,
         )
 
 
 # ─── Callback: MP3 Audio ─────────────────────────────────────
 async def callback_mp3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle MP3 button - send audio download link."""
+    """Handle MP3 button - delete menu and send MP3 audio file directly."""
     query = update.callback_query
     video_id = query.data.replace("dl_mp3_", "", 1)
+    chat_id = query.message.chat_id
     await query.answer("🎵 Menyiapkan audio MP3...")
+
+    # Delete previous menu message
+    try:
+        await query.message.delete()
+    except Exception as del_err:
+        logger.debug(f"Could not delete previous message: {del_err}")
 
     tiktok_data = context.bot_data.get("video_cache", {}).get(video_id)
     if not tiktok_data:
-        await query.message.reply_text(
-            "❌ Data video tidak ditemukan. Kirim ulang link TikTok-nya.",
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="❌ Data video tidak ditemukan. Kirim ulang link TikTok-nya.",
             parse_mode=ParseMode.HTML,
         )
         return
 
     music_url = tiktok_data.get("music_url", "")
     music_title = html_module.escape(tiktok_data.get("music_title", "Audio"))
+    music_author = html_module.escape(tiktok_data.get("music_author", "TikTok"))
 
     if music_url:
-        await query.message.reply_text(
-            f"🎵 <b>MP3 Audio</b>\n"
-            f"♫ {music_title}\n\n"
-            f"<a href=\"{html_module.escape(music_url)}\">⬇️ Download MP3</a>",
-            parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True,
-        )
+        sent = False
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Referer": "https://www.tiktok.com/",
+            }
+            async with httpx.AsyncClient(timeout=45, follow_redirects=True) as client:
+                resp = await client.get(music_url, headers=headers)
+                if resp.status_code == 200 and len(resp.content) > 1000:
+                    from io import BytesIO
+                    audio_bytes = BytesIO(resp.content)
+                    audio_bytes.name = f"{music_title}.mp3"
+                    await context.bot.send_audio(
+                        chat_id=chat_id,
+                        audio=audio_bytes,
+                        title=music_title,
+                        performer=music_author,
+                        caption=f"🎵 <b>{music_title}</b> - {music_author}",
+                        parse_mode=ParseMode.HTML,
+                    )
+                    sent = True
+        except Exception as err:
+            logger.warning(f"Failed to send MP3 audio file: {err}")
+
+        if not sent:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🎵 <b>MP3 Audio</b>\n♫ {music_title}\n\n<a href=\"{html_module.escape(music_url)}\">⬇️ Download MP3</a>",
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
     else:
-        await query.message.reply_text(
-            "❌ URL audio MP3 tidak tersedia untuk video ini.",
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="❌ URL audio MP3 tidak tersedia untuk video ini.",
             parse_mode=ParseMode.HTML,
         )
 
@@ -621,15 +693,23 @@ async def callback_shazam(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 # ─── Callback: Preview ───────────────────────────────────────
 async def callback_preview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle Preview button - send video preview URL."""
+    """Handle Preview button - delete menu and send in-app playable video preview."""
     query = update.callback_query
     video_id = query.data.replace("preview_", "", 1)
+    chat_id = query.message.chat_id
     await query.answer("📺 Menyiapkan preview...")
+
+    # Delete previous menu message
+    try:
+        await query.message.delete()
+    except Exception as del_err:
+        logger.debug(f"Could not delete previous message: {del_err}")
 
     tiktok_data = context.bot_data.get("video_cache", {}).get(video_id)
     if not tiktok_data:
-        await query.message.reply_text(
-            "❌ Data video tidak ditemukan. Kirim ulang link TikTok-nya.",
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="❌ Data video tidak ditemukan. Kirim ulang link TikTok-nya.",
             parse_mode=ParseMode.HTML,
         )
         return
@@ -639,26 +719,40 @@ async def callback_preview(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     original_url = tiktok_data.get("original_url", "")
 
     if play_url:
+        sent = False
         try:
-            # Try to send as actual video
-            await query.message.reply_video(
-                video=play_url,
-                caption=f"📺 Preview video\n🔗 {html_module.escape(original_url)}",
-                parse_mode=ParseMode.HTML,
-            )
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Referer": "https://www.tiktok.com/",
+            }
+            async with httpx.AsyncClient(timeout=45, follow_redirects=True) as client:
+                resp = await client.get(play_url, headers=headers)
+                if resp.status_code == 200 and len(resp.content) > 1000:
+                    from io import BytesIO
+                    v_bytes = BytesIO(resp.content)
+                    v_bytes.name = f"preview_{video_id}.mp4"
+                    await context.bot.send_video(
+                        chat_id=chat_id,
+                        video=v_bytes,
+                        caption=f"📺 <b>Video Preview</b>\n👤 @{html_module.escape(tiktok_data.get('author_username', ''))}",
+                        parse_mode=ParseMode.HTML,
+                        supports_streaming=True,
+                    )
+                    sent = True
         except Exception as e:
-            logger.warning(f"Failed to send video preview: {e}")
-            await query.message.reply_text(
-                f"📺 <b>Preview</b>\n\n"
-                f"<a href=\"{html_module.escape(play_url)}\">▶️ Tonton preview</a>\n"
-                f"🔗 <a href=\"{html_module.escape(original_url)}\">Link TikTok asli</a>",
+            logger.warning(f"Failed to send video preview stream: {e}")
+
+        if not sent:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"📺 <b>Preview</b>\n\n<a href=\"{html_module.escape(play_url)}\">▶️ Tonton preview</a>\n🔗 <a href=\"{html_module.escape(original_url)}\">Link TikTok asli</a>",
                 parse_mode=ParseMode.HTML,
                 disable_web_page_preview=False,
             )
     else:
-        await query.message.reply_text(
-            f"📺 <b>Preview</b>\n\n"
-            f"🔗 <a href=\"{html_module.escape(original_url)}\">Buka di TikTok</a>",
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"📺 <b>Preview</b>\n\n🔗 <a href=\"{html_module.escape(original_url)}\">Buka di TikTok</a>",
             parse_mode=ParseMode.HTML,
         )
 
