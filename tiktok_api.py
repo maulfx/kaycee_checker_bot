@@ -14,6 +14,7 @@ import asyncio
 from datetime import datetime
 from bs4 import BeautifulSoup
 from curl_cffi import requests as curl_requests
+import yt_dlp
 from config import TIKWM_API_URL, TIKWM_API_TIMEOUT
 
 logger = logging.getLogger(__name__)
@@ -278,9 +279,137 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
             "is_ad": bool(item.get("isAd", False)),
             "original_url": url,
         }
-
     except Exception as e:
         logger.warning(f"Engine 1 web scraper exception: {e}")
+        return None
+
+
+def _extract_tiktok_ytdlp_sync(url: str) -> dict | None:
+    """
+    Extract comprehensive TikTok video data and all adaptive quality tiers using yt-dlp.
+    """
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'extract_flat': False,
+        'skip_download': True,
+        'socket_timeout': 15,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
+    }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            if not info:
+                return None
+
+            video_id = str(info.get("id", ""))
+            title = info.get("title", "") or info.get("description", "")
+            duration = int(info.get("duration", 0) or 0)
+            create_time = int(info.get("timestamp", 0) or 0)
+            formatted_date = (
+                datetime.fromtimestamp(create_time).strftime("%d %B %Y, %H:%M:%S")
+                if create_time else "Unknown"
+            )
+            author_username = info.get("uploader_id") or info.get("uploader", "Unknown")
+            author_nickname = info.get("uploader", author_username)
+            author_avatar = info.get("avatar", "")
+            
+            views = int(info.get("view_count", 0) or 0)
+            likes = int(info.get("like_count", 0) or 0)
+            comments = int(info.get("comment_count", 0) or 0)
+            reposts = int(info.get("repost_count", 0) or 0)
+            
+            formats = info.get("formats", [])
+            parsed_streams = []
+            
+            for f in formats:
+                vcodec = f.get("vcodec")
+                if vcodec == "none" or not vcodec:
+                    continue
+                w = int(f.get("width") or 0)
+                h = int(f.get("height") or 0)
+                fps = int(round(f.get("fps") or 30))
+                tbr = f.get("tbr") or f.get("vbr") or 0
+                br_kbps = int(tbr) if tbr > 0 else 0
+                br_bps = br_kbps * 1000
+                data_size = int(f.get("filesize") or f.get("filesize_approx") or 0)
+                s_url = f.get("url", "")
+                f_id = f.get("format_id", "")
+                cleaned_codec = _clean_codec(vcodec)
+                
+                parsed_streams.append({
+                    "gear": f_id or f"{max(w,h)}p",
+                    "codec": cleaned_codec,
+                    "bitrate": br_bps,
+                    "width": w,
+                    "height": h,
+                    "fps": fps,
+                    "data_size": data_size,
+                    "url": s_url,
+                })
+            
+            parsed_streams.sort(
+                key=lambda x: (x.get("width", 0) * x.get("height", 0), x.get("fps", 0), x.get("bitrate", 0)),
+                reverse=True
+            )
+            
+            best_stream = parsed_streams[0] if parsed_streams else {}
+            width = best_stream.get("width") or int(info.get("width", 0) or 0)
+            height = best_stream.get("height") or int(info.get("height", 0) or 0)
+            fps = best_stream.get("fps") or int(round(info.get("fps") or 30))
+            bitrate_kbps = (best_stream.get("bitrate", 0) // 1000) if best_stream.get("bitrate") else int(info.get("tbr") or 0)
+            codec = best_stream.get("codec") or _clean_codec(info.get("vcodec", "h264"))
+            play_url = best_stream.get("url") or info.get("url", "")
+            hdplay_url = play_url
+            
+            browser_q = _calculate_quality_tier_string(width, height, 30, "browser")
+            phone_q = _calculate_quality_tier_string(width, height, fps, "phone")
+            
+            logger.info("Fetched TikTok video data via yt-dlp Engine")
+            return {
+                "id": video_id,
+                "title": title,
+                "hashtags": _parse_hashtags(title),
+                "duration": duration,
+                "create_time": create_time,
+                "formatted_date": formatted_date,
+                "author_username": author_username,
+                "author_nickname": author_nickname,
+                "author_avatar": author_avatar,
+                "views": views,
+                "likes": likes,
+                "comments": comments,
+                "favorites": 0,
+                "shares": reposts,
+                "downloads": 0,
+                "play_url": play_url,
+                "hdplay_url": hdplay_url,
+                "wmplay_url": "",
+                "cover_url": info.get("thumbnail", ""),
+                "origin_cover_url": info.get("thumbnail", ""),
+                "width": width,
+                "height": height,
+                "fps": fps,
+                "size": int(info.get("filesize") or info.get("filesize_approx") or 0),
+                "hd_size": 0,
+                "wm_size": 0,
+                "bitrate_kbps": bitrate_kbps,
+                "codec": codec,
+                "bitrate_info": parsed_streams,
+                "browser_quality": browser_q,
+                "phone_quality": phone_q,
+                "music_title": info.get("track") or f"original sound - {author_nickname}",
+                "music_author": info.get("artist") or author_nickname,
+                "music_url": "",
+                "music_is_original": True,
+                "music_duration": duration,
+                "region": "ID",
+                "source": _detect_source(width, height),
+                "is_ad": False,
+                "original_url": url,
+            }
+    except Exception as e:
+        logger.warning(f"yt-dlp engine extraction failed: {e}")
         return None
 
 
@@ -296,6 +425,15 @@ async def fetch_tiktok_data(url: str) -> dict | None:
             return data
     except Exception as e:
         logger.warning(f"Engine 1 execution failed: {e}")
+
+    # ─── Engine 1.5: yt-dlp Engine ──────────────────────────────
+    try:
+        loop = asyncio.get_running_loop()
+        ytdlp_data = await loop.run_in_executor(None, _extract_tiktok_ytdlp_sync, url)
+        if ytdlp_data and ytdlp_data.get("id"):
+            return ytdlp_data
+    except Exception as e:
+        logger.warning(f"yt-dlp engine failed: {e}")
 
     # ─── Engine 2: TikWM API ─────────────────────────────────────
     try:

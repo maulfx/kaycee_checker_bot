@@ -4,3 +4,4 @@ httpx
 python-dotenv
 curl_cffi
 beautifulsoup4
+yt-dlp
