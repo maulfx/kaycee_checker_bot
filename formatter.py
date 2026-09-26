@@ -200,26 +200,26 @@ def format_analysis_message(
     
     # 📈 Statistics
     lines.append(f"{ce('chart_up', '📈')} <b>Statistics</b>")
-    lines.append(f"• {ce('eye', '👀')} {_format_number(views)} Views")
-    lines.append(f"• {ce('heart', '❤️')} {_format_number(likes)} Likes")
-    lines.append(f"• {ce('comment', '💬')} {_format_number(comments)} Comments")
-    lines.append(f"• {ce('star', '⭐')} {_format_number(favorites)} Favorites")
-    lines.append(f"• {ce('forward', '🚀')} {_format_number(shares)} Shares")
-    lines.append(f"• {ce('download', '📥')} {_format_number(downloads)} Downloads")
+    lines.append(f"• {ce('eye', '👀')} <code>{_format_number(views)}</code> Views")
+    lines.append(f"• {ce('heart', '❤️')} <code>{_format_number(likes)}</code> Likes")
+    lines.append(f"• {ce('comment', '💬')} <code>{_format_number(comments)}</code> Comments")
+    lines.append(f"• {ce('star', '⭐')} <code>{_format_number(favorites)}</code> Favorites")
+    lines.append(f"• {ce('forward', '🚀')} <code>{_format_number(shares)}</code> Shares")
+    lines.append(f"• {ce('download', '📥')} <code>{_format_number(downloads)}</code> Downloads")
     lines.append("")
     
     # ℹ️ Information
     lines.append(f"{ce('info', 'ℹ️')} <b>Information</b>")
-    lines.append(f"• {ce('tag', '🆔')} ID | {video_id}")
-    lines.append(f"• {ce('tv', '💻')} Source | {source}")
-    lines.append(f"• {ce('location', '📍')} Region | {region_flag} {region_name}")
-    lines.append(f"• {ce('shield', '🛡️')} Shadow ban | {shadow_ban}")
+    lines.append(f"• {ce('tag', '🆔')} ID | <code>{video_id}</code>")
+    lines.append(f"• {ce('tv', '💻')} Source | <code>{source}</code>")
+    lines.append(f"• {ce('location', '📍')} Region | {region_flag} <b>{region_name}</b>")
+    lines.append(f"• {ce('shield', '🛡️')} Shadow ban | <code>{shadow_ban}</code>")
     lines.append("")
     
     # 🎬 Quality
     lines.append(f"{ce('video', '🎬')} <b>Quality</b>")
-    lines.append(f"• {ce('globe', '🌐')} Browser | {browser_q}")
-    lines.append(f"• {ce('phone', '📱')} Phone | {phone_q}")
+    lines.append(f"• {ce('globe', '🌐')} Browser | <code>{browser_q}</code>")
+    lines.append(f"• {ce('phone', '📱')} Phone | <code>{phone_q}</code>")
     
     # Expandable Stream Profiles blockquote (padded with invisible space for 100% full-width bubble match)
     FULL_WIDTH_PAD = "\u2800" * 28
@@ -244,8 +244,8 @@ def format_analysis_message(
             res_str = _get_stream_resolution_label(b_w, b_h, b_fps, gear)
 
             pad_str = FULL_WIDTH_PAD if idx == 0 else ""
-            quote_lines.append(f"{ce('globe', '🌐')} {gear}{pad_str}")
-            quote_lines.append(f"{res_str} • {bitrate_str} • {b_codec} • {size_str}")
+            quote_lines.append(f"{ce('globe', '🌐')} <b>{gear}</b>{pad_str}")
+            quote_lines.append(f"<code>{res_str}</code> • <code>{bitrate_str}</code> • <code>{b_codec}</code> • <code>{size_str}</code>")
     else:
         max_d = max(orig_width, orig_height)
         res_str = f"{max_d}p60" if max_d > 0 else "1080p60"
@@ -253,14 +253,14 @@ def format_analysis_message(
         size_bytes = (bitrate_kbps * 1000 / 8.0) * duration if (duration > 0 and bitrate_kbps > 0) else file_size
         size_str = _format_file_size_str(size_bytes) if size_bytes > 0 else "4.5 MB"
         
-        quote_lines.append(f"{ce('globe', '🌐')} play_addr{FULL_WIDTH_PAD}")
-        quote_lines.append(f"{res_str} • {bitrate_str} • {codec} • {size_str}")
+        quote_lines.append(f"{ce('globe', '🌐')} <b>play_addr</b>{FULL_WIDTH_PAD}")
+        quote_lines.append(f"<code>{res_str}</code> • <code>{bitrate_str}</code> • <code>{codec}</code> • <code>{size_str}</code>")
 
     lines.append(f"<blockquote expandable>\n" + "\n".join(quote_lines) + "\n</blockquote>")
     
     orig_str = f"{orig_width}x{orig_height}" if (orig_width > 0 and orig_height > 0) else "1174x1080"
-    lines.append(f"| Original | {orig_str}")
-    lines.append(f"| VQ Score | {vq_display}")
+    lines.append(f"| Original | <code>{orig_str}</code>")
+    lines.append(f"| VQ Score | <code>{vq_display}</code>")
     lines.append("")
     
     # 🏷️ Categories
