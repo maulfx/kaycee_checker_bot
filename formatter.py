@@ -227,10 +227,11 @@ def format_analysis_message(
     lines.append(f"• 🌐 Browser | {_blue(browser_q)}")
     lines.append(f"• 📱 Phone | {_blue(phone_q)}")
     
-    # Expandable Stream Profiles blockquote
+    # Expandable Stream Profiles blockquote (padded with invisible space for 100% full-width bubble match)
+    FULL_WIDTH_PAD = "\u2800" * 28
     quote_lines = []
     if bitrate_info:
-        for b in bitrate_info:
+        for idx, b in enumerate(bitrate_info):
             gear = b.get("gear", "play_addr")
             b_codec = b.get("codec", "hevc")
             b_bitrate = b.get("bitrate", 0)
@@ -250,7 +251,8 @@ def format_analysis_message(
             res_str = _get_stream_resolution_label(b_w, b_h, b_fps, gear)
 
             gear_link = _blue(gear, b_url)
-            quote_lines.append(f"🌐 {gear_link}")
+            pad_str = FULL_WIDTH_PAD if idx == 0 else ""
+            quote_lines.append(f"🌐 {gear_link}{pad_str}")
             quote_lines.append(f"{res_str} • {bitrate_str} • {b_codec} • {size_str}")
     else:
         max_d = max(orig_width, orig_height)
@@ -260,7 +262,7 @@ def format_analysis_message(
         size_str = _format_file_size_str(size_bytes) if size_bytes > 0 else "4.5 MB"
         play_url = tiktok_data.get("play_url", video_url)
         
-        quote_lines.append(f"🌐 {_blue('play_addr', play_url)}")
+        quote_lines.append(f"🌐 {_blue('play_addr', play_url)}{FULL_WIDTH_PAD}")
         quote_lines.append(f"{res_str} • {bitrate_str} • {codec} • {size_str}")
 
     lines.append(f"<blockquote expandable>\n" + "\n".join(quote_lines) + "\n</blockquote>")
