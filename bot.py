@@ -113,14 +113,9 @@ def _build_info_caption(data: dict) -> str:
     dur_str = f" • {_format_duration(duration)}" if duration > 0 else ""
     lines.append(f"{ce('music_notes', '🎶')} {music_title}{dur_str}")
     lines.append("")
-
-    # Quick Insights Card
-    lines.append(f"{ce('chart_up', '📈')} <b>Quick Insights</b>")
-    lines.append(
-        f"• {ce('eye', '👀')} <b>{_format_number(views)}</b> Views  • {ce('heart', '❤️')} <b>{_format_number(likes)}</b> Likes  • {ce('comment', '💬')} <b>{_format_number(comments)}</b> Comments"
-    )
-    lines.append("")
     lines.append("↓ <b>Select an option below:</b>")
+
+    return "\n".join(lines)
 
     return "\n".join(lines)
 
