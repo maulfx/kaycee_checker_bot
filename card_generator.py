@@ -4,18 +4,56 @@ import asyncio
 import httpx
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
-WIN_DIR = os.environ.get("WINDIR", "C:\\Windows")
-FONT_BOLD_PATH = os.path.join(WIN_DIR, "Fonts", "segoeuib.ttf")
-FONT_REG_PATH = os.path.join(WIN_DIR, "Fonts", "segoeui.ttf")
-FONT_SEMI_PATH = os.path.join(WIN_DIR, "Fonts", "segoeuisl.ttf")
-EMOJI_FONT_PATH = os.path.join(WIN_DIR, "Fonts", "seguiemj.ttf")
+def get_font(font_type: str, size: int):
+    """
+    Load font gracefully across Windows, Linux Docker containers, and macOS.
+    font_type: 'bold', 'regular', 'semi'
+    """
+    candidates = []
+    if font_type == "bold":
+        candidates = [
+            "segoeuib.ttf",
+            "arialbd.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+            "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf",
+            "DejaVuSans-Bold.ttf",
+            "Arial Bold.ttf",
+        ]
+    elif font_type == "semi":
+        candidates = [
+            "segoeuisl.ttf",
+            "segoeui.ttf",
+            "arial.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "DejaVuSans.ttf",
+        ]
+    else:
+        candidates = [
+            "segoeui.ttf",
+            "arial.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/TTF/DejaVuSans.ttf",
+            "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
+            "DejaVuSans.ttf",
+            "Arial.ttf",
+        ]
 
+    # Prepend Windows font paths if on Windows
+    win_dir = os.environ.get("WINDIR", "C:\\Windows")
+    win_fonts = [os.path.join(win_dir, "Fonts", c) for c in candidates if not c.startswith("/")]
+    all_to_try = win_fonts + candidates
 
-def get_font(path: str, size: int):
-    try:
-        return ImageFont.truetype(path, size)
-    except Exception:
-        return ImageFont.load_default()
+    for cand in all_to_try:
+        try:
+            return ImageFont.truetype(cand, size)
+        except Exception:
+            continue
+
+    return ImageFont.load_default()
 
 
 def create_rounded_mask(size: tuple[int, int], radius: int) -> Image.Image:
@@ -49,7 +87,7 @@ async def fetch_image(url: str) -> Image.Image | None:
                 img = Image.open(io.BytesIO(r.content))
                 return img.convert("RGBA")
     except Exception as e:
-        print(f"Error fetching image {url}: {e}")
+        pass
     return None
 
 
@@ -67,14 +105,12 @@ def generate_analysis_card(
     draw = ImageDraw.Draw(card)
 
     # ─── Background Ambient Glow ───────────────────────────────
-    # Top-right cyan glow
     glow1 = Image.new("RGBA", (500, 500), (0, 0, 0, 0))
     gdraw1 = ImageDraw.Draw(glow1)
     gdraw1.ellipse([(50, 50), (450, 450)], fill=(14, 165, 233, 40))
     glow1 = glow1.filter(ImageFilter.GaussianBlur(80))
     card.paste(glow1, (750, -100), glow1)
 
-    # Bottom-left purple glow
     glow2 = Image.new("RGBA", (500, 500), (0, 0, 0, 0))
     gdraw2 = ImageDraw.Draw(glow2)
     gdraw2.ellipse([(50, 50), (450, 450)], fill=(168, 85, 247, 35))
@@ -82,13 +118,13 @@ def generate_analysis_card(
     card.paste(glow2, (-100, 300), glow2)
 
     # ─── Fonts ────────────────────────────────────────────────
-    f_title = get_font(FONT_BOLD_PATH, 26)
-    f_header = get_font(FONT_BOLD_PATH, 22)
-    f_sub = get_font(FONT_REG_PATH, 16)
-    f_stat_val = get_font(FONT_BOLD_PATH, 24)
-    f_stat_lbl = get_font(FONT_REG_PATH, 14)
-    f_badge = get_font(FONT_BOLD_PATH, 13)
-    f_small = get_font(FONT_REG_PATH, 13)
+    f_title = get_font("bold", 26)
+    f_header = get_font("bold", 22)
+    f_sub = get_font("regular", 16)
+    f_stat_val = get_font("bold", 24)
+    f_stat_lbl = get_font("regular", 14)
+    f_badge = get_font("bold", 13)
+    f_small = get_font("regular", 13)
 
     # ─── Left Side: Video Cover Thumbnail ──────────────────────
     cover_box = (40, 40, 340, 580)
