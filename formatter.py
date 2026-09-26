@@ -193,7 +193,7 @@ def format_analysis_message(
     lines = []
     
     # Header: 🎵 SKYRUL  🗓️ 31 August 2026, 05:10:55
-    lines.append(f"🎵 <b>{username_upper}</b>  🗓️ {formatted_date}")
+    lines.append(f"{ce('music_note', '🎵')} <b>{username_upper}</b>  {ce('calendar', '🗓️')} {formatted_date}")
     
     # Title in Blockquote (Italic)
     if title:
@@ -201,31 +201,31 @@ def format_analysis_message(
     
     # Audio Track
     dur_str = f" • {_format_duration(duration)}" if duration > 0 else ""
-    lines.append(f"🎶 {music_title}{dur_str}")
+    lines.append(f"{ce('music_notes', '🎶')} {music_title}{dur_str}")
     lines.append("")
     
     # 📈 Statistics
-    lines.append("📈 <b>Statistics</b>")
-    lines.append(f"• 👀 {_blue(_format_number(views))} Views")
-    lines.append(f"• ❤️ {_blue(_format_number(likes))} Likes")
-    lines.append(f"• 💬 {_blue(_format_number(comments))} Comments")
-    lines.append(f"• ⭐ {_blue(_format_number(favorites))} Favorites")
-    lines.append(f"• 🚀 {_blue(_format_number(shares))} Shares")
-    lines.append(f"• 📥 {_blue(_format_number(downloads))} Downloads")
+    lines.append(f"{ce('chart_up', '📈')} <b>Statistics</b>")
+    lines.append(f"• {ce('eye', '👀')} {_blue(_format_number(views))} Views")
+    lines.append(f"• {ce('heart', '❤️')} {_blue(_format_number(likes))} Likes")
+    lines.append(f"• {ce('comment', '💬')} {_blue(_format_number(comments))} Comments")
+    lines.append(f"• {ce('star', '⭐')} {_blue(_format_number(favorites))} Favorites")
+    lines.append(f"• {ce('forward', '🚀')} {_blue(_format_number(shares))} Shares")
+    lines.append(f"• {ce('download', '📥')} {_blue(_format_number(downloads))} Downloads")
     lines.append("")
     
     # ℹ️ Information
-    lines.append("ℹ️ <b>Information</b>")
-    lines.append(f"• 🆔 ID | {_blue(video_id)}")
-    lines.append(f"• 💻 Source | {_blue(source)}")
-    lines.append(f"• 📍 Region | {region_flag} {_blue(region_name)}")
-    lines.append(f"• 🛡️ Shadow ban | {_blue(shadow_ban)}")
+    lines.append(f"{ce('info', 'ℹ️')} <b>Information</b>")
+    lines.append(f"• {ce('tag', '🆔')} ID | {_blue(video_id)}")
+    lines.append(f"• {ce('tv', '💻')} Source | {_blue(source)}")
+    lines.append(f"• {ce('location', '📍')} Region | {region_flag} {_blue(region_name)}")
+    lines.append(f"• {ce('shield', '🛡️')} Shadow ban | {_blue(shadow_ban)}")
     lines.append("")
     
     # 🎬 Quality
-    lines.append("🎬 <b>Quality</b>")
-    lines.append(f"• 🌐 Browser | {_blue(browser_q)}")
-    lines.append(f"• 📱 Phone | {_blue(phone_q)}")
+    lines.append(f"{ce('video', '🎬')} <b>Quality</b>")
+    lines.append(f"• {ce('globe', '🌐')} Browser | {_blue(browser_q)}")
+    lines.append(f"• {ce('phone', '📱')} Phone | {_blue(phone_q)}")
     
     # Expandable Stream Profiles blockquote (padded with invisible space for 100% full-width bubble match)
     FULL_WIDTH_PAD = "\u2800" * 28
@@ -252,7 +252,7 @@ def format_analysis_message(
 
             gear_link = _blue(gear, b_url)
             pad_str = FULL_WIDTH_PAD if idx == 0 else ""
-            quote_lines.append(f"🌐 {gear_link}{pad_str}")
+            quote_lines.append(f"{ce('globe', '🌐')} {gear_link}{pad_str}")
             quote_lines.append(f"{res_str} • {bitrate_str} • {b_codec} • {size_str}")
     else:
         max_d = max(orig_width, orig_height)
@@ -262,7 +262,7 @@ def format_analysis_message(
         size_str = _format_file_size_str(size_bytes) if size_bytes > 0 else "4.5 MB"
         play_url = tiktok_data.get("play_url", video_url)
         
-        quote_lines.append(f"🌐 {_blue('play_addr', play_url)}{FULL_WIDTH_PAD}")
+        quote_lines.append(f"{ce('globe', '🌐')} {_blue('play_addr', play_url)}{FULL_WIDTH_PAD}")
         quote_lines.append(f"{res_str} • {bitrate_str} • {codec} • {size_str}")
 
     lines.append(f"<blockquote expandable>\n" + "\n".join(quote_lines) + "\n</blockquote>")
@@ -274,7 +274,7 @@ def format_analysis_message(
     
     # 🏷️ Categories
     if categories:
-        lines.append("🏷️ <b>Categories</b>")
+        lines.append(f"{ce('tag', '🏷️')} <b>Categories</b>")
         for cat in categories:
             lines.append(f"| {_blue(html.escape(cat))}")
     
