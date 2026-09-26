@@ -115,10 +115,12 @@ def _get_stream_resolution_label(w: int, h: int, fps: int, gear: str = "") -> st
 def format_analysis_message(
     tiktok_data: dict,
     video_quality: dict,
-    vq_score: float
+    vq_score: float,
+    expanded: bool = False,
 ) -> str:
     """
     Format all analysis data into a clean Telegram HTML message matching the user's design and TgAndroidIcons pack.
+    When expanded=False, only the top 2 streams are shown to keep message compact.
     """
     
     # ─── Extract data ─────────────────────────────────────────
@@ -184,9 +186,11 @@ def format_analysis_message(
     lines.append(f"🎵 <b>{nickname}</b>  🗓 {formatted_date}")
     
     # Title wrapped in blockquote
+    title_idx = -1
     if title:
         display_title = title if len(title) <= 150 else title[:147] + "..."
         lines.append(f"<blockquote>{display_title}</blockquote>")
+        title_idx = len(lines) - 1
     
     # Music info
     if music_title:
@@ -222,10 +226,11 @@ def format_analysis_message(
     lines.append(f"• 🌐 Browser | {browser_q}")
     lines.append(f"• 📱 Phone | {phone_q}")
     
-    # Dynamic Stream Quality Blockquote
+    # Dynamic Stream Quality Blockquote (2 top streams when collapsed, all when expanded)
     quote_lines = []
     if bitrate_info:
-        for b in bitrate_info:
+        display_streams = bitrate_info if expanded else bitrate_info[:2]
+        for b in display_streams:
             gear = b.get("gear", "")
             b_codec = b.get("codec", "h264")
             b_bitrate = b.get("bitrate", 0)
@@ -318,18 +323,28 @@ def format_analysis_message(
     lines.append("")
     
     # ═══ CATEGORIES ═══
+    cat_idx = -1
     if categories:
-        lines.append("🏷️ <b>Categories</b>")
+        cat_lines = ["🏷️ <b>Categories</b>"]
         for cat in categories:
-            lines.append(f"• {cat}")
+            cat_lines.append(f"• {cat}")
+        cat_idx = len(lines)
+        lines.append("\n".join(cat_lines))
     
     full_msg = "\n".join(lines)
     # Ensure message is strictly <= 1024 characters for Telegram video captions
     if len(full_msg) > 1024:
-        excess = len(full_msg) - 1020
-        if title and len(title) > excess + 20:
-            new_title = title[:len(title) - excess - 10] + "..."
-            lines[1] = f"<blockquote>{new_title}</blockquote>"
-            full_msg = "\n".join(lines)
+        # Step 1: Truncate title if present
+        if title and title_idx >= 0:
+            excess = len(full_msg) - 1020
+            if len(title) > excess + 20:
+                new_title = title[:len(title) - excess - 10] + "..."
+                lines[title_idx] = f"<blockquote>{new_title}</blockquote>"
+                full_msg = "\n".join(lines)
+        
+        # Step 2: Remove categories if still too long
+        if len(full_msg) > 1024 and cat_idx >= 0 and cat_idx < len(lines):
+            lines[cat_idx] = ""
+            full_msg = "\n".join([l for l in lines if l != ""])
 
     return full_msg
