@@ -182,12 +182,6 @@ def format_analysis_message(
     else:
         calc_q = float(video_quality.get("vq_score") or 70.0)
         vq_display = f"{calc_q:.2f}"
-    
-    # Helper to style clickable blue values
-    def _blue(val: str, href: str = video_url) -> str:
-        if href:
-            return f'<a href="{html.escape(href)}">{val}</a>'
-        return val
 
     # ─── Build message ────────────────────────────────────────
     lines = []
@@ -206,26 +200,26 @@ def format_analysis_message(
     
     # 📈 Statistics
     lines.append(f"{ce('chart_up', '📈')} <b>Statistics</b>")
-    lines.append(f"• {ce('eye', '👀')} {_blue(_format_number(views))} Views")
-    lines.append(f"• {ce('heart', '❤️')} {_blue(_format_number(likes))} Likes")
-    lines.append(f"• {ce('comment', '💬')} {_blue(_format_number(comments))} Comments")
-    lines.append(f"• {ce('star', '⭐')} {_blue(_format_number(favorites))} Favorites")
-    lines.append(f"• {ce('forward', '🚀')} {_blue(_format_number(shares))} Shares")
-    lines.append(f"• {ce('download', '📥')} {_blue(_format_number(downloads))} Downloads")
+    lines.append(f"• {ce('eye', '👀')} {_format_number(views)} Views")
+    lines.append(f"• {ce('heart', '❤️')} {_format_number(likes)} Likes")
+    lines.append(f"• {ce('comment', '💬')} {_format_number(comments)} Comments")
+    lines.append(f"• {ce('star', '⭐')} {_format_number(favorites)} Favorites")
+    lines.append(f"• {ce('forward', '🚀')} {_format_number(shares)} Shares")
+    lines.append(f"• {ce('download', '📥')} {_format_number(downloads)} Downloads")
     lines.append("")
     
     # ℹ️ Information
     lines.append(f"{ce('info', 'ℹ️')} <b>Information</b>")
-    lines.append(f"• {ce('tag', '🆔')} ID | {_blue(video_id)}")
-    lines.append(f"• {ce('tv', '💻')} Source | {_blue(source)}")
-    lines.append(f"• {ce('location', '📍')} Region | {region_flag} {_blue(region_name)}")
-    lines.append(f"• {ce('shield', '🛡️')} Shadow ban | {_blue(shadow_ban)}")
+    lines.append(f"• {ce('tag', '🆔')} ID | {video_id}")
+    lines.append(f"• {ce('tv', '💻')} Source | {source}")
+    lines.append(f"• {ce('location', '📍')} Region | {region_flag} {region_name}")
+    lines.append(f"• {ce('shield', '🛡️')} Shadow ban | {shadow_ban}")
     lines.append("")
     
     # 🎬 Quality
     lines.append(f"{ce('video', '🎬')} <b>Quality</b>")
-    lines.append(f"• {ce('globe', '🌐')} Browser | {_blue(browser_q)}")
-    lines.append(f"• {ce('phone', '📱')} Phone | {_blue(phone_q)}")
+    lines.append(f"• {ce('globe', '🌐')} Browser | {browser_q}")
+    lines.append(f"• {ce('phone', '📱')} Phone | {phone_q}")
     
     # Expandable Stream Profiles blockquote (padded with invisible space for 100% full-width bubble match)
     FULL_WIDTH_PAD = "\u2800" * 28
@@ -239,7 +233,6 @@ def format_analysis_message(
             b_h = b.get("height", 0)
             b_fps = b.get("fps", 60)
             b_data_size = float(b.get("data_size", 0) or 0)
-            b_url = b.get("url", video_url)
             
             if b_data_size <= 0 and duration > 0 and b_bitrate > 0:
                 b_size_bytes = (b_bitrate / 8.0) * duration
@@ -250,9 +243,8 @@ def format_analysis_message(
             bitrate_str = _format_bitrate_str(b_bitrate)
             res_str = _get_stream_resolution_label(b_w, b_h, b_fps, gear)
 
-            gear_link = _blue(gear, b_url)
             pad_str = FULL_WIDTH_PAD if idx == 0 else ""
-            quote_lines.append(f"{ce('globe', '🌐')} {gear_link}{pad_str}")
+            quote_lines.append(f"{ce('globe', '🌐')} {gear}{pad_str}")
             quote_lines.append(f"{res_str} • {bitrate_str} • {b_codec} • {size_str}")
     else:
         max_d = max(orig_width, orig_height)
@@ -260,22 +252,21 @@ def format_analysis_message(
         bitrate_str = _format_bitrate_str(bitrate_kbps * 1000) if bitrate_kbps > 0 else "2.0 MBps"
         size_bytes = (bitrate_kbps * 1000 / 8.0) * duration if (duration > 0 and bitrate_kbps > 0) else file_size
         size_str = _format_file_size_str(size_bytes) if size_bytes > 0 else "4.5 MB"
-        play_url = tiktok_data.get("play_url", video_url)
         
-        quote_lines.append(f"{ce('globe', '🌐')} {_blue('play_addr', play_url)}{FULL_WIDTH_PAD}")
+        quote_lines.append(f"{ce('globe', '🌐')} play_addr{FULL_WIDTH_PAD}")
         quote_lines.append(f"{res_str} • {bitrate_str} • {codec} • {size_str}")
 
     lines.append(f"<blockquote expandable>\n" + "\n".join(quote_lines) + "\n</blockquote>")
     
     orig_str = f"{orig_width}x{orig_height}" if (orig_width > 0 and orig_height > 0) else "1174x1080"
-    lines.append(f"| Original | {_blue(orig_str)}")
-    lines.append(f"| VQ Score | {_blue(vq_display)}")
+    lines.append(f"| Original | {orig_str}")
+    lines.append(f"| VQ Score | {vq_display}")
     lines.append("")
     
     # 🏷️ Categories
     if categories:
         lines.append(f"{ce('tag', '🏷️')} <b>Categories</b>")
         for cat in categories:
-            lines.append(f"| {_blue(html.escape(cat))}")
+            lines.append(f"| {html.escape(cat)}")
     
     return "\n".join(lines).strip()
