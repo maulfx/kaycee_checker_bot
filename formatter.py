@@ -205,8 +205,8 @@ def format_analysis_message(
     # ─── Build message ────────────────────────────────────────
     lines = []
     
-    # Header: 🎵 SKYRUL  🗓 31 August 2026, 05:10:55
-    lines.append(f"🎵 <b>{username_upper}</b>  🗓 {formatted_date}")
+    # Header: 🎵 SKYRUL  🗓️ 31 August 2026, 05:10:55
+    lines.append(f"🎵 <b>{username_upper}</b>  🗓️ {formatted_date}")
     
     # Title in Blockquote (Italic)
     if title:
@@ -214,29 +214,29 @@ def format_analysis_message(
     
     # Audio Track
     dur_str = f" • {_format_duration(duration)}" if duration > 0 else ""
-    lines.append(f"♬ {music_title}{dur_str}")
+    lines.append(f"🎶 {music_title}{dur_str}")
     lines.append("")
     
-    # 📊 Statistics
-    lines.append("📊 <b>Statistics</b>")
-    lines.append(f"• 👁 {_blue(_format_number(views))} Views")
-    lines.append(f"• ♡ {_blue(_format_number(likes))} Likes")
-    lines.append(f"• 🗨 {_blue(_format_number(comments))} Comments")
-    lines.append(f"• 🔖 {_blue(_format_number(favorites))} Favorites")
-    lines.append(f"• ↗ {_blue(_format_number(shares))} Shares")
-    lines.append(f"• ⤓ {_blue(_format_number(downloads))} Downloads")
+    # 📈 Statistics
+    lines.append("📈 <b>Statistics</b>")
+    lines.append(f"• 👀 {_blue(_format_number(views))} Views")
+    lines.append(f"• ❤️ {_blue(_format_number(likes))} Likes")
+    lines.append(f"• 💬 {_blue(_format_number(comments))} Comments")
+    lines.append(f"• ⭐ {_blue(_format_number(favorites))} Favorites")
+    lines.append(f"• 🚀 {_blue(_format_number(shares))} Shares")
+    lines.append(f"• 📥 {_blue(_format_number(downloads))} Downloads")
     lines.append("")
     
-    # ⓘ Information
-    lines.append("ⓘ <b>Information</b>")
-    lines.append(f"• ⬡ ID | {_blue(video_id)}")
-    lines.append(f"• ⤓ Source | {_blue(source)}")
-    lines.append(f"• ⚲ Region | {region_flag} {_blue(region_name)}")
-    lines.append(f"• 👻 Shadow ban | {_blue(shadow_ban)}")
+    # ℹ️ Information
+    lines.append("ℹ️ <b>Information</b>")
+    lines.append(f"• 🆔 ID | {_blue(video_id)}")
+    lines.append(f"• 💻 Source | {_blue(source)}")
+    lines.append(f"• 📍 Region | {region_flag} {_blue(region_name)}")
+    lines.append(f"• 🛡️ Shadow ban | {_blue(shadow_ban)}")
     lines.append("")
     
-    # ☆ Quality
-    lines.append("☆ <b>Quality</b>")
+    # 🎬 Quality
+    lines.append("🎬 <b>Quality</b>")
     lines.append(f"• 🌐 Browser | {_blue(browser_q)}")
     lines.append(f"• 📱 Phone | {_blue(phone_q)}")
     
@@ -283,9 +283,9 @@ def format_analysis_message(
     lines.append(f"| VQ Score | {_blue(vq_display)}")
     lines.append("")
     
-    # ✍ Categories
+    # 🏷️ Categories
     if categories:
-        lines.append("✍ <b>Categories</b>")
+        lines.append("🏷️ <b>Categories</b>")
         for cat in categories:
             lines.append(f"| {_blue(html.escape(cat))}")
         lines.append("")
