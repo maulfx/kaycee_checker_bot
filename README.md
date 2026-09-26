@@ -11,11 +11,15 @@ Bot Telegram yang menganalisis kualitas video TikTok secara otomatis. Cukup kiri
 
 | Fitur | Deskripsi |
 |-------|-----------|
-| 📊 **Statistik** | Views, likes, komentar, favorit, shares, downloads |
-| ℹ️ **Informasi** | Video ID, sumber upload, region, deteksi shadow ban |
-| ⭐ **Kualitas** | Resolusi, codec, bitrate, frame rate, ukuran file |
-| 📈 **VQ Score** | Skor kualitas video 0-100 dengan rating A+ sampai F |
-| 🏷 **Kategori** | Deteksi otomatis kategori dari hashtag |
+| 📊 **Statistik Lengkap** | Views, likes, komentar, favorit/bookmarks, shares, downloads langsung dari TikTok API |
+| ℹ️ **Informasi & Region** | Video ID, sumber video, region negara (bendera), deteksi potensi shadow ban |
+| ☆ **Analisis Kualitas** | Browser tier, Phone tier, resolusi, codec (HEVC/H.264), bitrate, frame rate (fps), ukuran file |
+| 📱 **Native Expandable Streams** | List resolusi & stream link disajikan dalam container `<blockquote expandable>` yang bisa di-tap langsung |
+| ⚡ **VQ Score Modern** | Skor kompresi (0 = No Compress / Lossless Quality) |
+| 🔄 **In-Place Recheck** | Tombol Recheck interaktif untuk memperbarui analisis tanpa membuat pesan baru |
+| 📥 **Multi-Resolution Download** | Download video instan per resolusi (576p, 720p, 1080p, Original HD) |
+| 🎵 **MP3 & Shazam** | Ekstrak audio MP3 dan deteksi musik otomatis |
+| 🏷 **Deteksi Kategori** | Analisis otomatis topik dan kategori video dari hashtag |
 
 ---
 
