@@ -7,6 +7,7 @@ matching the user's reference design with TgAndroidIcons style, blockquotes, and
 import html
 from datetime import datetime
 from config import REGION_FLAGS, REGION_NAMES, CATEGORY_KEYWORDS
+from emoji_icons import ce
 from video_analyzer import format_bitrate, format_file_size
 from vq_score import get_vq_grade, get_vq_bar
 
@@ -63,12 +64,12 @@ def _detect_shadow_ban(data: dict) -> str:
     age_hours = (datetime.now().timestamp() - create_time) / 3600
     
     if age_hours > 48 and views == 0:
-        return "⚠️ Possible"
+        return f"{ce('warning', '⚠️')} Possible"
     
     if age_hours > 72 and views > 0:
         engagement_rate = (likes + comments + shares) / views
         if engagement_rate < 0.001 and views < 100:
-            return "⚠️ Possible"
+            return f"{ce('warning', '⚠️')} Possible"
     
     return "No"
 
@@ -183,7 +184,7 @@ def format_analysis_message(
     lines = []
     
     # ═══ HEADER (Author & Date) ═══
-    lines.append(f"🎵 <b>{nickname}</b>  🗓 {formatted_date}")
+    lines.append(f"{ce('music_note', '🎵')} <b>{nickname}</b>  {ce('calendar', '🗓')} {formatted_date}")
     
     # Title wrapped in blockquote
     title_idx = -1
@@ -194,7 +195,7 @@ def format_analysis_message(
     
     # Music info
     if music_title:
-        music_display = f"🎧 {music_title}"
+        music_display = f"{ce('headphones', '🎧')} {music_title}"
         if duration:
             music_display += f" • {_format_duration(duration)}"
         lines.append(music_display)
@@ -202,32 +203,35 @@ def format_analysis_message(
     lines.append("")
     
     # ═══ STATISTICS ═══
-    lines.append("📊 <b>Statistics</b>")
-    lines.append(f"• 👁 <b>{_format_number(views)}</b> Views")
-    lines.append(f"• 🤍 <b>{_format_number(likes)}</b> Likes")
-    lines.append(f"• 💬 <b>{_format_number(comments)}</b> Comments")
-    lines.append(f"• 🔖 <b>{_format_number(favorites)}</b> Favorites")
-    lines.append(f"• ↗️ <b>{_format_number(shares)}</b> Shares")
-    lines.append(f"• 📥 <b>{_format_number(downloads)}</b> Downloads")
+    lines.append(f"{ce('chart_bar', '📊')} <b>Statistics</b>")
+    lines.append(f"• {ce('eye', '👁')} <b>{_format_number(views)}</b> Views")
+    lines.append(f"• {ce('heart', '🤍')} <b>{_format_number(likes)}</b> Likes")
+    lines.append(f"• {ce('comment', '💬')} <b>{_format_number(comments)}</b> Comments")
+    lines.append(f"• {ce('bookmark', '🔖')} <b>{_format_number(favorites)}</b> Favorites")
+    lines.append(f"• {ce('forward', '↗️')} <b>{_format_number(shares)}</b> Shares")
+    lines.append(f"• {ce('download', '📥')} <b>{_format_number(downloads)}</b> Downloads")
     lines.append("")
     
     # ═══ INFORMATION ═══
-    lines.append("📋 <b>Information</b>")
-    lines.append(f"• 🆔 ID | <code>{video_id}</code>")
-    lines.append(f"• 📥 Source | {source}")
-    lines.append(f"• 📍 Region | {region_flag} {region_name}")
-    lines.append(f"• 🛡️ Shadow ban | {shadow_ban}")
+    lines.append(f"{ce('info', '📋')} <b>Information</b>")
+    lines.append(f"• {ce('pin', '🆔')} ID | <code>{video_id}</code>")
+    lines.append(f"• {ce('inbox', '📥')} Source | {source}")
+    lines.append(f"• {ce('location', '📍')} Region | {region_flag} {region_name}")
+    lines.append(f"• {ce('shield', '🛡️')} Shadow ban | {shadow_ban}")
     if tiktok_data.get("is_ad"):
-        lines.append(f"• 📢 Ad | Yes")
+        lines.append(f"• {ce('megaphone', '📢')} Ad | Yes")
     lines.append("")
     
     # ═══ QUALITY ═══
-    lines.append("✨ <b>Quality</b>")
-    lines.append(f"• 🌐 Browser | {browser_q}")
-    lines.append(f"• 📱 Phone | {phone_q}")
+    lines.append(f"{ce('star_3', '☆')} <b>Quality</b>")
+    lines.append(f"• {ce('globe', '🌐')} Browser | {browser_q}")
+    lines.append(f"• {ce('phone', '📱')} Phone | {phone_q}")
     
     # Dynamic Stream Quality Blockquote (2 top streams when collapsed, all when expanded)
     quote_lines = []
+    globe_icon = ce('globe', '🌐')
+    phone_icon = ce('phone', '📱')
+
     if bitrate_info:
         display_streams = bitrate_info if expanded else bitrate_info[:2]
         for b in display_streams:
@@ -255,27 +259,27 @@ def format_analysis_message(
                 return name
 
             if "adapt_lowest_1080" in gear:
-                header = f"🌐 📱 {_link(gear)}"
+                header = f"{globe_icon} {phone_icon} {_link(gear)}"
             elif gear == "play_addr":
-                header = f"📱 {_link('play_addr')} 📱 {_link('play_addr_h264')}"
+                header = f"{phone_icon} {_link('play_addr')} {phone_icon} {_link('play_addr_h264')}"
             elif "normal" in gear:
-                header = f"🌐 📱 {_link('play_addr')} 🌐 {_link('normal_720_0')} 📱 {_link('play_addr_h264')}"
+                header = f"{globe_icon} {phone_icon} {_link('play_addr')} {globe_icon} {_link('normal_720_0')} {phone_icon} {_link('play_addr_h264')}"
             elif "adapt_lower_720" in gear:
-                header = f"🌐 📱 {_link(gear)}"
+                header = f"{globe_icon} {phone_icon} {_link(gear)}"
             elif "lower_540_0" in gear:
-                header = f"🌐 {_link(gear)}"
+                header = f"{globe_icon} {_link(gear)}"
             elif "adapt_540" in gear:
-                header = f"🌐 📱 {_link(gear)} 📱 {_link('play_addr_bytevc1')}"
+                header = f"{globe_icon} {phone_icon} {_link(gear)} {phone_icon} {_link('play_addr_bytevc1')}"
             elif "lower_540" in gear:
-                header = f"📱 {_link(gear)}"
+                header = f"{phone_icon} {_link(gear)}"
             elif "lowest_540" in gear:
-                header = f"📱 {_link(gear)}"
+                header = f"{phone_icon} {_link(gear)}"
             elif "lowest_480" in gear:
-                header = f"📱 {_link(gear)}"
+                header = f"{phone_icon} {_link(gear)}"
             else:
                 is_web = "normal" in gear or "720" in gear or "adapt" in gear
                 is_phone = "adapt" in gear or "lower" in gear or "lowest" in gear or "540" in gear or "1080" in gear or "play_addr" in gear
-                icon_str = "🌐 📱" if (is_web and is_phone) else ("🌐" if is_web else "📱")
+                icon_str = f"{globe_icon} {phone_icon}" if (is_web and is_phone) else (globe_icon if is_web else phone_icon)
                 header = f"{icon_str} {_link(gear)}"
 
             quote_lines.append(header)
@@ -294,7 +298,7 @@ def format_analysis_message(
                 return f'<a href="{html.escape(play_url)}">{name}</a>'
             return name
         
-        quote_lines.append(f"📱 {_link_raw('play_addr')} 📱 {_link_raw(f'play_addr_{codec}')}")
+        quote_lines.append(f"{phone_icon} {_link_raw('play_addr')} {phone_icon} {_link_raw(f'play_addr_{codec}')}")
         quote_lines.append(f"{res_str} • {bitrate_str} • {codec} • {size_str}")
         quote_lines.append("")
 
@@ -325,7 +329,7 @@ def format_analysis_message(
     # ═══ CATEGORIES ═══
     cat_idx = -1
     if categories:
-        cat_lines = ["🏷️ <b>Categories</b>"]
+        cat_lines = [f"{ce('tag', '🏷️')} <b>Categories</b>"]
         for cat in categories:
             cat_lines.append(f"• {cat}")
         cat_idx = len(lines)

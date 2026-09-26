@@ -39,6 +39,7 @@ from tiktok_api import fetch_tiktok_data, extract_tiktok_url
 from video_analyzer import analyze_video
 from vq_score import calculate_vq_score
 from formatter import format_analysis_message
+from emoji_icons import ce
 
 # ─── Logging ──────────────────────────────────────────────────
 logging.basicConfig(
@@ -78,7 +79,7 @@ def _format_file_size(bytes_val: float) -> str:
 def _build_info_caption(data: dict) -> str:
     """
     Build the caption message that appears above the action buttons.
-    Matches the reference design: username, date, region, caption/hashtags.
+    Matches the reference design: username, date, region, caption/hashtags with TgAndroidIcons.
     """
     username = html_module.escape(data.get("author_username", "Unknown"))
     formatted_date = html_module.escape(data.get("formatted_date", "Unknown"))
@@ -89,7 +90,7 @@ def _build_info_caption(data: dict) -> str:
 
     lines = []
     # Header line: Music icon + username + date + region
-    lines.append(f"🎵 <b>{username}</b>  🗓 {formatted_date}  {region_flag} {region_name}")
+    lines.append(f"{ce('music_note', '🎵')} <b>{username}</b>  {ce('calendar', '🗓')} {formatted_date}  {region_flag} {region_name}")
 
     # Caption/title with hashtags in blockquote
     if title:
@@ -99,7 +100,7 @@ def _build_info_caption(data: dict) -> str:
     # Music info
     music_title = data.get("music_title", "")
     if music_title:
-        music_display = f"🎧 {html_module.escape(music_title)}"
+        music_display = f"{ce('headphones', '🎧')} {html_module.escape(music_title)}"
         duration = data.get("duration", 0)
         if duration > 0:
             mins = duration // 60
@@ -108,7 +109,7 @@ def _build_info_caption(data: dict) -> str:
         lines.append(music_display)
 
     lines.append("")
-    lines.append("↓ <b>Choose an action</b>")
+    lines.append(f"{ce('arrow_down', '↓')} <b>Choose an action</b>")
 
     return "\n".join(lines)
 
