@@ -315,12 +315,37 @@ async def cmd_about(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(about_text, parse_mode=ParseMode.HTML)
 
 
+async def _fetch_cover_bytes(url: str) -> bytes | None:
+    """Download cover image bytes so Telegram sends photo + caption + buttons reliably."""
+    if not url:
+        return None
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+            "Referer": "https://www.tiktok.com/",
+        }
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            r = await client.get(url, headers=headers)
+            if r.status_code == 200 and len(r.content) > 500:
+                return r.content
+    except Exception as e:
+        logger.debug(f"Failed to fetch cover bytes: {e}")
+    return None
+
+
+def _build_checker_keyboard(video_id: str) -> InlineKeyboardMarkup:
+    """Build inline keyboard for checker analysis message with Recheck button."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔄 Recheck", callback_data=f"recheck_{video_id}")]
+    ])
+
+
 # ─── Handle TikTok Link (Initial) ────────────────────────────
 async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     When user sends a TikTok link:
     1. Fetch video data
-    2. Send thumbnail image with caption + inline keyboard buttons
+    2. Send thumbnail image with caption + inline keyboard buttons merged
     3. Store data in context for callback handlers
     """
     text = update.message.text or ""
@@ -332,7 +357,6 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
     logger.info(f"Processing TikTok URL: {url}")
 
     try:
-        # Fetch TikTok data directly without intermediate status message
         tiktok_data = await fetch_tiktok_data(url)
 
         if not tiktok_data:
@@ -357,15 +381,30 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
         caption = _build_info_caption(tiktok_data)
         keyboard = _build_action_keyboard(tiktok_data, video_id)
 
-        # Get thumbnail URL
+        # Get thumbnail URL and fetch bytes to guarantee merged photo message
         cover_url = (
             tiktok_data.get("origin_cover_url")
             or tiktok_data.get("cover_url")
             or ""
         )
+        cover_bytes = await _fetch_cover_bytes(cover_url) if cover_url else None
 
-        if cover_url:
-            # Send thumbnail with caption and buttons
+        sent_photo = False
+        if cover_bytes:
+            try:
+                photo_file = BytesIO(cover_bytes)
+                photo_file.name = f"cover_{video_id}.jpg"
+                await update.message.reply_photo(
+                    photo=photo_file,
+                    caption=caption,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=keyboard,
+                )
+                sent_photo = True
+            except Exception as e:
+                logger.warning(f"Failed to send cover bytes: {e}")
+
+        if not sent_photo and cover_url:
             try:
                 await update.message.reply_photo(
                     photo=cover_url,
@@ -373,16 +412,11 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     parse_mode=ParseMode.HTML,
                     reply_markup=keyboard,
                 )
-            except Exception as photo_err:
-                logger.warning(f"Failed to send photo: {photo_err}, falling back to text")
-                await update.message.reply_text(
-                    caption,
-                    parse_mode=ParseMode.HTML,
-                    reply_markup=keyboard,
-                    disable_web_page_preview=True,
-                )
-        else:
-            # No thumbnail available, send text only
+                sent_photo = True
+            except Exception as e:
+                logger.warning(f"Failed to send cover URL: {e}")
+
+        if not sent_photo:
             await update.message.reply_text(
                 caption,
                 parse_mode=ParseMode.HTML,
@@ -477,98 +511,9 @@ async def _download_tiktok_video_bytes(orig_url: str, fallback_url: str = "", qu
     return None
 
 
-# ─── Animated Loading Helper ─────────────────────────────────
-async def _start_loading_animation(
-    query,
-    action_text: str = "Processing request...",
-    steps: list[tuple[str, str]] | None = None,
-) -> asyncio.Task | None:
-    """
-    Show an animated loading status on the clicked menu message so it doesn't abruptly disappear.
-    Removes keyboard and updates status smoothly every 1.2s.
-    """
-    message = query.message
-    if not message:
-        return None
-
-    if steps is None:
-        steps = [
-            ("Fetching video data...", "▰▱▱▱▱"),
-            ("Downloading best quality stream...", "▰▰▱▱▱"),
-            ("Analyzing codec & VQ Score...", "▰▰▰▱▱"),
-            ("Generating formatted output...", "▰▰▰▰▱"),
-            ("Sending to Telegram...", "▰▰▰▰▰"),
-        ]
-
-    initial_caption = (
-        f"⏳ <b>Processing Request...</b>\n\n"
-        f"<code>[▰▱▱▱▱]</code> <i>{html_module.escape(action_text)}</i>"
-    )
-
-    try:
-        if message.photo:
-            await message.edit_caption(
-                caption=initial_caption,
-                reply_markup=None,
-                parse_mode=ParseMode.HTML,
-            )
-        else:
-            await message.edit_text(
-                text=initial_caption,
-                reply_markup=None,
-                parse_mode=ParseMode.HTML,
-            )
-    except Exception as e:
-        logger.debug(f"Could not edit initial loading state: {e}")
-
-    async def _anim_loop():
-        try:
-            for step_text, bar in steps:
-                await asyncio.sleep(1.2)
-                frame_text = (
-                    f"⏳ <b>Processing Request...</b>\n\n"
-                    f"<code>[{bar}]</code> <i>{html_module.escape(step_text)}</i>"
-                )
-                try:
-                    if message.photo:
-                        await message.edit_caption(
-                            caption=frame_text,
-                            reply_markup=None,
-                            parse_mode=ParseMode.HTML,
-                        )
-                    else:
-                        await message.edit_text(
-                            text=frame_text,
-                            reply_markup=None,
-                            parse_mode=ParseMode.HTML,
-                        )
-                except Exception:
-                    pass
-        except asyncio.CancelledError:
-            pass
-
-    return asyncio.create_task(_anim_loop())
-
-
-async def _cleanup_loading_message(anim_task: asyncio.Task | None, message) -> None:
-    """Cancel background loading animation task and safely delete the loading message."""
-    if anim_task and not anim_task.done():
-        anim_task.cancel()
-        try:
-            await anim_task
-        except (asyncio.CancelledError, Exception):
-            pass
-
-    if message:
-        try:
-            await message.delete()
-        except Exception as e:
-            logger.debug(f"Could not delete message during cleanup: {e}")
-
-
 # ─── Callback: Check (Full Analysis) ─────────────────────────
 async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle Check button - animate previous menu, run video quality analysis, send video with analysis caption, clean up."""
+    """Handle Check button - delete previous menu, run video quality analysis, send video with analysis caption and Recheck button."""
     query = update.callback_query
     await query.answer("🔍 Checking video quality...")
 
@@ -576,18 +521,11 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     tiktok_data = context.bot_data.get("video_cache", {}).get(video_id)
     chat_id = query.message.chat_id
 
-    # Start animated loading transition
-    anim_task = await _start_loading_animation(
-        query,
-        action_text="Analyzing video quality & preparing stream...",
-        steps=[
-            ("Analyzing video streams...", "▰▱▱▱▱"),
-            ("Downloading HD video buffer...", "▰▰▱▱▱"),
-            ("Calculating VQ Score...", "▰▰▰▱▱"),
-            ("Assembling analysis report...", "▰▰▰▰▱"),
-            ("Sending to Telegram...", "▰▰▰▰▰"),
-        ],
-    )
+    # Delete the previous menu message directly
+    try:
+        await query.message.delete()
+    except Exception as e:
+        logger.debug(f"Could not delete message: {e}")
 
     try:
         if not tiktok_data:
@@ -626,13 +564,13 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
 
         message = format_analysis_message(tiktok_data, video_quality, vq)
+        checker_keyboard = _build_checker_keyboard(video_id)
 
-        # Download and send the highest resolution video file with analysis caption in one message
+        # Download and send the highest resolution video file with analysis caption and Recheck button
         sent_video = False
         raw_bytes = await _download_tiktok_video_bytes(orig_url, fallback_url=best_url, quality="best")
         if raw_bytes:
             try:
-                from io import BytesIO
                 video_bytes = BytesIO(raw_bytes)
                 video_bytes.name = f"{video_id}_{final_width}x{final_height}.mp4"
                 
@@ -644,6 +582,7 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     width=final_width if final_width > 0 else None,
                     height=final_height if final_height > 0 else None,
                     supports_streaming=True,
+                    reply_markup=checker_keyboard,
                 )
                 sent_video = True
             except Exception as vid_err:
@@ -656,6 +595,7 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 text=message,
                 parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True,
+                reply_markup=checker_keyboard,
             )
 
         logger.info(
@@ -673,13 +613,85 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             text=f"❌ <b>An error occurred during analysis</b>\n\n<code>{error_msg}</code>",
             parse_mode=ParseMode.HTML,
         )
-    finally:
-        await _cleanup_loading_message(anim_task, query.message)
+
+
+# ─── Callback: Recheck (In-Place Refresh) ────────────────────
+async def callback_recheck(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle Recheck button - re-scrape fresh TikTok data and refresh the analysis message in-place."""
+    query = update.callback_query
+    video_id = query.data.replace("recheck_", "", 1)
+    await query.answer("🔄 Refreshing video analysis...")
+
+    tiktok_data = context.bot_data.get("video_cache", {}).get(video_id)
+    orig_url = tiktok_data.get("original_url") if tiktok_data else ""
+    if not orig_url:
+        author = tiktok_data.get("author_username", "user") if tiktok_data else "user"
+        orig_url = f"https://www.tiktok.com/@{author}/video/{video_id}"
+
+    try:
+        # Re-fetch latest TikTok data from APIs
+        new_data = await fetch_tiktok_data(orig_url)
+        if new_data and new_data.get("id"):
+            tiktok_data = new_data
+            if "video_cache" not in context.bot_data:
+                context.bot_data["video_cache"] = {}
+            context.bot_data["video_cache"][video_id] = tiktok_data
+
+        if not tiktok_data:
+            await query.answer("❌ Failed to refresh video data.", show_alert=True)
+            return
+
+        bitrate_info = tiktok_data.get("bitrate_info", [])
+        best_url = bitrate_info[0].get("url", "") if bitrate_info else (tiktok_data.get("hdplay_url") or tiktok_data.get("play_url", ""))
+        video_quality = await analyze_video(best_url, fallback_data=tiktok_data)
+
+        final_width = (bitrate_info[0].get("width") if bitrate_info else 0) or video_quality.get("width") or tiktok_data.get("width", 0)
+        final_height = (bitrate_info[0].get("height") if bitrate_info else 0) or video_quality.get("height") or tiktok_data.get("height", 0)
+        final_bitrate = (bitrate_info[0].get("bitrate", 0) // 1000 if bitrate_info else 0) or video_quality.get("bitrate_kbps") or tiktok_data.get("bitrate_kbps", 0)
+        final_codec = (bitrate_info[0].get("codec") if bitrate_info else "") or video_quality.get("codec") or tiktok_data.get("codec", "h264")
+        final_fps = (bitrate_info[0].get("fps") if bitrate_info else 0) or video_quality.get("fps", 30)
+
+        vq = calculate_vq_score(
+            width=final_width,
+            height=final_height,
+            bitrate_kbps=final_bitrate,
+            codec=final_codec,
+            fps=final_fps,
+        )
+
+        message = format_analysis_message(tiktok_data, video_quality, vq)
+        checker_keyboard = _build_checker_keyboard(video_id)
+
+        try:
+            if query.message.caption is not None:
+                await query.edit_message_caption(
+                    caption=message,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=checker_keyboard,
+                )
+            else:
+                await query.edit_message_text(
+                    text=message,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=checker_keyboard,
+                    disable_web_page_preview=True,
+                )
+            await query.answer("✅ Video analysis refreshed!")
+        except Exception as edit_err:
+            if "not modified" in str(edit_err).lower():
+                await query.answer("✅ Video analysis is already up to date!")
+            else:
+                logger.warning(f"Message edit notice on recheck: {edit_err}")
+                await query.answer("✅ Video analysis refreshed!")
+
+    except Exception as e:
+        logger.error(f"Error in recheck: {e}", exc_info=True)
+        await query.answer("❌ Error refreshing analysis.", show_alert=True)
 
 
 # ─── Callback: Download Video ────────────────────────────────
 async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle download buttons (540p, 720p, 1080p, original) - animate menu, send in-app playable video with caption & hashtags, clean up."""
+    """Handle download buttons (540p, 720p, 1080p, original) - delete menu, send in-app playable video with caption & hashtags."""
     query = update.callback_query
     chat_id = query.message.chat_id
 
@@ -692,18 +704,11 @@ async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     await query.answer(f"📥 Downloading {label} video...")
 
-    # Start animated loading transition
-    anim_task = await _start_loading_animation(
-        query,
-        action_text=f"Preparing {label} video download...",
-        steps=[
-            (f"Connecting to {label} stream...", "▰▱▱▱▱"),
-            (f"Downloading {label} video file...", "▰▰▱▱▱"),
-            ("Verifying file integrity...", "▰▰▰▱▱"),
-            ("Formatting caption & hashtags...", "▰▰▰▰▱"),
-            ("Sending video to chat...", "▰▰▰▰▰"),
-        ],
-    )
+    # Delete the previous menu message directly
+    try:
+        await query.message.delete()
+    except Exception as e:
+        logger.debug(f"Could not delete message: {e}")
 
     try:
         tiktok_data = context.bot_data.get("video_cache", {}).get(video_id)
@@ -773,7 +778,6 @@ async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         raw_bytes = await _download_tiktok_video_bytes(orig_url, fallback_url=download_url, quality=quality)
         if raw_bytes:
             try:
-                from io import BytesIO
                 v_bytes = BytesIO(raw_bytes)
                 v_bytes.name = f"TikTok_{label}_{video_id}.mp4"
                 await context.bot.send_video(
@@ -805,29 +809,23 @@ async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 text=f"❌ Download URL for {label} is unavailable.",
                 parse_mode=ParseMode.HTML,
             )
-    finally:
-        await _cleanup_loading_message(anim_task, query.message)
+    except Exception as err:
+        logger.error(f"Error in download callback: {err}")
 
 
 # ─── Callback: MP3 Audio ─────────────────────────────────────
 async def callback_mp3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle MP3 button - animate menu and send MP3 audio file directly, clean up."""
+    """Handle MP3 button - delete menu and send MP3 audio file directly."""
     query = update.callback_query
     video_id = query.data.replace("dl_mp3_", "", 1)
     chat_id = query.message.chat_id
     await query.answer("🎵 Preparing MP3 audio...")
 
-    # Start animated loading transition
-    anim_task = await _start_loading_animation(
-        query,
-        action_text="Preparing MP3 audio...",
-        steps=[
-            ("Extracting audio track...", "▰▱▱▱▱"),
-            ("Downloading MP3 buffer...", "▰▰▱▱▱"),
-            ("Setting up ID3 metadata...", "▰▰▰▱▱"),
-            ("Sending audio to chat...", "▰▰▰▰▰"),
-        ],
-    )
+    # Delete previous menu directly
+    try:
+        await query.message.delete()
+    except Exception as e:
+        logger.debug(f"Could not delete message: {e}")
 
     try:
         tiktok_data = context.bot_data.get("video_cache", {}).get(video_id)
@@ -853,7 +851,6 @@ async def callback_mp3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 async with httpx.AsyncClient(timeout=45, follow_redirects=True) as client:
                     resp = await client.get(music_url, headers=headers)
                     if resp.status_code == 200 and len(resp.content) > 1000:
-                        from io import BytesIO
                         audio_bytes = BytesIO(resp.content)
                         audio_bytes.name = f"{music_title}.mp3"
                         await context.bot.send_audio(
@@ -881,8 +878,8 @@ async def callback_mp3(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 text="❌ MP3 audio URL is unavailable for this video.",
                 parse_mode=ParseMode.HTML,
             )
-    finally:
-        await _cleanup_loading_message(anim_task, query.message)
+    except Exception as err:
+        logger.error(f"Error in MP3 callback: {err}")
 
 
 # ─── Callback: Shazam ────────────────────────────────────────
@@ -922,22 +919,17 @@ async def callback_shazam(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 # ─── Callback: Preview ───────────────────────────────────────
 async def callback_preview(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle Preview button - animate menu and send in-app playable video preview, clean up."""
+    """Handle Preview button - delete menu and send in-app playable video preview."""
     query = update.callback_query
     video_id = query.data.replace("preview_", "", 1)
     chat_id = query.message.chat_id
     await query.answer("📺 Preparing preview...")
 
-    # Start animated loading transition
-    anim_task = await _start_loading_animation(
-        query,
-        action_text="Preparing video preview...",
-        steps=[
-            ("Fetching preview stream...", "▰▱▱▱▱"),
-            ("Downloading preview buffer...", "▰▰▱▱▱"),
-            ("Sending video preview...", "▰▰▰▰▰"),
-        ],
-    )
+    # Delete previous menu directly
+    try:
+        await query.message.delete()
+    except Exception as e:
+        logger.debug(f"Could not delete message: {e}")
 
     try:
         tiktok_data = context.bot_data.get("video_cache", {}).get(video_id)
@@ -963,7 +955,6 @@ async def callback_preview(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 async with httpx.AsyncClient(timeout=45, follow_redirects=True) as client:
                     resp = await client.get(play_url, headers=headers)
                     if resp.status_code == 200 and len(resp.content) > 1000:
-                        from io import BytesIO
                         v_bytes = BytesIO(resp.content)
                         v_bytes.name = f"preview_{video_id}.mp4"
                         await context.bot.send_video(
@@ -990,8 +981,8 @@ async def callback_preview(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 text=f"▷ <b>Preview</b>\n\n🔗 <a href=\"{html_module.escape(original_url)}\">Open on TikTok</a>",
                 parse_mode=ParseMode.HTML,
             )
-    finally:
-        await _cleanup_loading_message(anim_task, query.message)
+    except Exception as err:
+        logger.error(f"Error in preview callback: {err}")
 
 
 # ─── Callback Router ─────────────────────────────────────────
@@ -1000,7 +991,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     query = update.callback_query
     data = query.data
 
-    if data.startswith("check_"):
+    if data.startswith("recheck_"):
+        await callback_recheck(update, context)
+    elif data.startswith("check_"):
         await callback_check(update, context)
     elif data.startswith("dl_mp3_"):
         await callback_mp3(update, context)
@@ -1012,6 +1005,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await callback_preview(update, context)
     else:
         await query.answer("❓ Unknown action.")
+
 
 
 # ─── Message Handler ─────────────────────────────────────────
