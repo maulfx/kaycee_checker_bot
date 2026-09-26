@@ -40,6 +40,7 @@ from video_analyzer import analyze_video
 from vq_score import calculate_vq_score
 from formatter import format_analysis_message
 from emoji_icons import ce
+from card_generator import generate_analysis_card, fetch_image
 
 # ─── Logging ──────────────────────────────────────────────────
 logging.basicConfig(
@@ -396,19 +397,28 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
         caption = _build_info_caption(tiktok_data)
         keyboard = _build_action_keyboard(tiktok_data, video_id)
 
-        # Get thumbnail URL and fetch bytes to guarantee merged photo message
+        # Generate Dynamic Infographic Card
         cover_url = (
             tiktok_data.get("origin_cover_url")
             or tiktok_data.get("cover_url")
             or ""
         )
-        cover_bytes = await _fetch_cover_bytes(cover_url) if cover_url else None
+        avatar_url = tiktok_data.get("author_avatar") or ""
+
+        cover_img = await fetch_image(cover_url) if cover_url else None
+        avatar_img = await fetch_image(avatar_url) if avatar_url else None
+
+        card_bytes = None
+        try:
+            card_bytes = generate_analysis_card(tiktok_data, {}, cover_image=cover_img, avatar_image=avatar_img)
+        except Exception as card_err:
+            logger.warning(f"Error generating dynamic card: {card_err}")
 
         sent_photo = False
-        if cover_bytes:
+        if card_bytes:
             try:
-                photo_file = BytesIO(cover_bytes)
-                photo_file.name = f"cover_{video_id}.jpg"
+                photo_file = BytesIO(card_bytes)
+                photo_file.name = f"card_{video_id}.jpg"
                 await update.message.reply_photo(
                     photo=photo_file,
                     caption=caption,
@@ -417,7 +427,7 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 )
                 sent_photo = True
             except Exception as e:
-                logger.warning(f"Failed to send cover bytes: {e}")
+                logger.warning(f"Failed to send generated card bytes: {e}")
 
         if not sent_photo and cover_url:
             try:
