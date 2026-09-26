@@ -79,7 +79,7 @@ def _format_file_size(bytes_val: float) -> str:
 def _build_info_caption(data: dict) -> str:
     """
     Build the caption message that appears above the action buttons.
-    Matches the reference design: username, date, region, caption/hashtags with TgAndroidIcons.
+    Matches the reference design: username, date, region, caption/hashtags.
     """
     username = html_module.escape(data.get("author_username", "Unknown"))
     formatted_date = html_module.escape(data.get("formatted_date", "Unknown"))
@@ -90,7 +90,7 @@ def _build_info_caption(data: dict) -> str:
 
     lines = []
     # Header line: Music icon + username + date + region
-    lines.append(f"{ce('music_note', '🎵')} <b>{username}</b>  {ce('calendar', '🗓')} {formatted_date}  {region_flag} {region_name}")
+    lines.append(f"🎵 <b>{username}</b>  🗓 {formatted_date}  {region_flag} {region_name}")
 
     # Caption/title with hashtags in blockquote
     if title:
@@ -100,7 +100,7 @@ def _build_info_caption(data: dict) -> str:
     # Music info
     music_title = data.get("music_title", "")
     if music_title:
-        music_display = f"{ce('headphones', '🎧')} {html_module.escape(music_title)}"
+        music_display = f"🎧 {html_module.escape(music_title)}"
         duration = data.get("duration", 0)
         if duration > 0:
             mins = duration // 60
@@ -109,7 +109,7 @@ def _build_info_caption(data: dict) -> str:
         lines.append(music_display)
 
     lines.append("")
-    lines.append(f"{ce('arrow_down', '↓')} <b>Choose an action</b>")
+    lines.append("↓ <b>Choose an action</b>")
 
     return "\n".join(lines)
 
@@ -334,19 +334,11 @@ async def _fetch_cover_bytes(url: str) -> bytes | None:
     return None
 
 
-def _build_checker_keyboard(video_id: str, expanded: bool = False, total_streams: int = 0) -> InlineKeyboardMarkup:
-    """Build inline keyboard for checker analysis message with Recheck and Expand/Collapse buttons."""
-    buttons = []
-    if total_streams > 2:
-        if expanded:
-            toggle_btn = InlineKeyboardButton("🔼 Show Less", callback_data=f"streams_hide_{video_id}")
-        else:
-            remaining = total_streams - 2
-            toggle_btn = InlineKeyboardButton(f"🔽 Show More ({remaining})", callback_data=f"streams_show_{video_id}")
-        buttons.append([toggle_btn])
-    
-    buttons.append([InlineKeyboardButton("🔄 Recheck", callback_data=f"recheck_{video_id}")])
-    return InlineKeyboardMarkup(buttons)
+def _build_checker_keyboard(video_id: str) -> InlineKeyboardMarkup:
+    """Build inline keyboard for checker analysis message with Recheck button."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔄 Recheck", callback_data=f"recheck_{video_id}")]
+    ])
 
 
 # ─── Handle TikTok Link (Initial) ────────────────────────────
@@ -572,9 +564,8 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             fps=final_fps,
         )
 
-        total_streams = len(bitrate_info)
-        message = format_analysis_message(tiktok_data, video_quality, vq, expanded=False)
-        checker_keyboard = _build_checker_keyboard(video_id, expanded=False, total_streams=total_streams)
+        message = format_analysis_message(tiktok_data, video_quality, vq)
+        checker_keyboard = _build_checker_keyboard(video_id)
 
         # Download and send the highest resolution video file with analysis caption and Recheck button
         sent_video = False
@@ -625,70 +616,6 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
 
 
-# ─── Callback: Toggle Streams (Expand/Collapse) ──────────────
-async def callback_toggle_streams(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle Show More / Show Less stream quality toggle button."""
-    query = update.callback_query
-    data = query.data
-    expanded = data.startswith("streams_show_")
-    video_id = data.replace("streams_show_", "").replace("streams_hide_", "")
-
-    await query.answer()
-
-    tiktok_data = context.bot_data.get("video_cache", {}).get(video_id)
-    if not tiktok_data:
-        orig_url = f"https://www.tiktok.com/@user/video/{video_id}"
-        tiktok_data = await fetch_tiktok_data(orig_url)
-        if tiktok_data:
-            if "video_cache" not in context.bot_data:
-                context.bot_data["video_cache"] = {}
-            context.bot_data["video_cache"][video_id] = tiktok_data
-
-    if not tiktok_data:
-        await query.answer("❌ Video data expired. Please send the link again.", show_alert=True)
-        return
-
-    bitrate_info = tiktok_data.get("bitrate_info", [])
-    total_streams = len(bitrate_info)
-
-    best_url = bitrate_info[0].get("url", "") if bitrate_info else (tiktok_data.get("hdplay_url") or tiktok_data.get("play_url", ""))
-    video_quality = await analyze_video(best_url, fallback_data=tiktok_data)
-
-    final_width = (bitrate_info[0].get("width") if bitrate_info else 0) or video_quality.get("width") or tiktok_data.get("width", 0)
-    final_height = (bitrate_info[0].get("height") if bitrate_info else 0) or video_quality.get("height") or tiktok_data.get("height", 0)
-    final_bitrate = (bitrate_info[0].get("bitrate", 0) // 1000 if bitrate_info else 0) or video_quality.get("bitrate_kbps") or tiktok_data.get("bitrate_kbps", 0)
-    final_codec = (bitrate_info[0].get("codec") if bitrate_info else "") or video_quality.get("codec") or tiktok_data.get("codec", "h264")
-    final_fps = (bitrate_info[0].get("fps") if bitrate_info else 0) or video_quality.get("fps", 30)
-
-    vq = calculate_vq_score(
-        width=final_width,
-        height=final_height,
-        bitrate_kbps=final_bitrate,
-        codec=final_codec,
-        fps=final_fps,
-    )
-
-    message = format_analysis_message(tiktok_data, video_quality, vq, expanded=expanded)
-    checker_keyboard = _build_checker_keyboard(video_id, expanded=expanded, total_streams=total_streams)
-
-    try:
-        if query.message.caption is not None:
-            await query.edit_message_caption(
-                caption=message,
-                parse_mode=ParseMode.HTML,
-                reply_markup=checker_keyboard,
-            )
-        else:
-            await query.edit_message_text(
-                text=message,
-                parse_mode=ParseMode.HTML,
-                reply_markup=checker_keyboard,
-                disable_web_page_preview=True,
-            )
-    except Exception as e:
-        logger.debug(f"Could not edit message in toggle streams: {e}")
-
-
 # ─── Callback: Recheck (In-Place Refresh) ────────────────────
 async def callback_recheck(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle Recheck button - re-scrape fresh TikTok data and refresh the analysis message in-place."""
@@ -716,7 +643,6 @@ async def callback_recheck(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             return
 
         bitrate_info = tiktok_data.get("bitrate_info", [])
-        total_streams = len(bitrate_info)
         best_url = bitrate_info[0].get("url", "") if bitrate_info else (tiktok_data.get("hdplay_url") or tiktok_data.get("play_url", ""))
         video_quality = await analyze_video(best_url, fallback_data=tiktok_data)
 
@@ -734,8 +660,8 @@ async def callback_recheck(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             fps=final_fps,
         )
 
-        message = format_analysis_message(tiktok_data, video_quality, vq, expanded=False)
-        checker_keyboard = _build_checker_keyboard(video_id, expanded=False, total_streams=total_streams)
+        message = format_analysis_message(tiktok_data, video_quality, vq)
+        checker_keyboard = _build_checker_keyboard(video_id)
 
         try:
             if query.message.caption is not None:
@@ -1066,9 +992,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     query = update.callback_query
     data = query.data
 
-    if data.startswith("streams_show_") or data.startswith("streams_hide_"):
-        await callback_toggle_streams(update, context)
-    elif data.startswith("recheck_"):
+    if data.startswith("recheck_"):
         await callback_recheck(update, context)
     elif data.startswith("check_"):
         await callback_check(update, context)
