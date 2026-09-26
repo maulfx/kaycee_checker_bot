@@ -174,19 +174,6 @@ def format_analysis_message(
     
     # Categories from hashtags
     categories = _infer_categories(hashtags)
-    
-    # Tips / Suggested search queries
-    tips = tiktok_data.get("suggested_words", [])
-    if not tips:
-        tips_candidates = []
-        if music_title and "original sound" not in music_title.lower():
-            tips_candidates.append(music_title.lower())
-        for ht in hashtags[:3]:
-            # Convert CamelCase hashtag to space separated words
-            cleaned_ht = re.sub(r"([a-z])([A-Z])", r"\1 \2", ht).lower()
-            if cleaned_ht not in tips_candidates:
-                tips_candidates.append(cleaned_ht)
-        tips = tips_candidates[:2]
 
     # VQ Score: Use exact score from TikTok if available
     raw_vq = float(tiktok_data.get("vq_score") or vq_score or 0.0)
@@ -288,12 +275,5 @@ def format_analysis_message(
         lines.append("🏷️ <b>Categories</b>")
         for cat in categories:
             lines.append(f"| {_blue(html.escape(cat))}")
-        lines.append("")
-    
-    # 💡 Tips
-    if tips:
-        lines.append("💡 <b>Tips</b>")
-        for tip in tips:
-            lines.append(f"| {_blue(html.escape(str(tip)))}")
     
     return "\n".join(lines).strip()
