@@ -76,40 +76,60 @@ def _format_file_size(bytes_val: float) -> str:
     return f"{int(bytes_val)}B"
 
 
+def _format_duration(seconds: int) -> str:
+    """Format duration in seconds to MM:SS format."""
+    if seconds <= 0:
+        return "0:00"
+    minutes = seconds // 60
+    secs = seconds % 60
+    return f"{minutes}:{secs:02d}"
+
+
 def _build_info_caption(data: dict) -> str:
     """
     Build the caption message that appears above the action buttons.
-    Matches the reference design: username, date, region, caption/hashtags.
+    Uses modern Samsung One UI card-based layout.
     """
-    username = html_module.escape(data.get("author_username", "Unknown"))
-    formatted_date = html_module.escape(data.get("formatted_date", "Unknown"))
+    raw_username = data.get("author_username", "Unknown")
+    raw_nickname = data.get("author_nickname", raw_username)
+    username = html_module.escape(str(raw_username))
+    nickname = html_module.escape(str(raw_nickname))
+    formatted_date = html_module.escape(str(data.get("formatted_date", "Unknown")))
     region_code = data.get("region", "")
     region_flag = REGION_FLAGS.get(region_code, "🌐")
     region_name = REGION_NAMES.get(region_code, region_code or "Unknown")
-    title = html_module.escape(data.get("title", ""))
+    title = html_module.escape(str(data.get("title", "")))
+    music_title = data.get("music_title", "")
+    duration = data.get("duration", 0)
+    views = data.get("views", 0)
+    likes = data.get("likes", 0)
+    comments = data.get("comments", 0)
 
     lines = []
-    # Header line: Music icon + username + date + region
-    lines.append(f"🎵 <b>{username}</b>  🗓 {formatted_date}  {region_flag} {region_name}")
+    # Header: Author Profile & Region
+    if raw_username != raw_nickname:
+        lines.append(f"👤 <b>{nickname}</b>  ·  <code>@{username}</code>")
+    else:
+        lines.append(f"👤 <b>{nickname}</b>")
+    lines.append(f"🗓 <code>{formatted_date}</code>  ·  {region_flag} <b>{region_name}</b>")
 
-    # Caption/title with hashtags in blockquote
+    # Caption in blockquote
     if title:
-        display_title = title if len(title) <= 300 else title[:297] + "..."
+        display_title = title if len(title) <= 200 else title[:197] + "..."
         lines.append(f"<blockquote>{display_title}</blockquote>")
 
-    # Music info
-    music_title = data.get("music_title", "")
+    # Audio badge
     if music_title:
-        music_display = f"🎧 {html_module.escape(music_title)}"
-        duration = data.get("duration", 0)
-        if duration > 0:
-            mins = duration // 60
-            secs = duration % 60
-            music_display += f" • {mins}:{secs:02d}"
-        lines.append(music_display)
+        dur_str = f" <code>• {_format_duration(duration)}</code>" if duration > 0 else ""
+        lines.append(f"🎧 <i>{html_module.escape(str(music_title))}</i>{dur_str}")
 
     lines.append("")
-    lines.append("↓ <b>Choose an action</b>")
+    # Quick Insights Card
+    lines.append(
+        "<blockquote>📊 <b>Quick Insights</b>\n"
+        f"• 👁 <b>{_format_number(views)}</b> Views  • 🤍 <b>{_format_number(likes)}</b> Likes  • 💬 <b>{_format_number(comments)}</b></blockquote>"
+    )
+    lines.append("↓ <b>Select an option below:</b>")
 
     return "\n".join(lines)
 

@@ -179,54 +179,64 @@ def format_analysis_message(
     # VQ Score: Use exact score from TikTok if available
     final_vq = tiktok_data.get("vq_score") or vq_score
     
-    # ─── Build message ────────────────────────────────────────
+    # ─── Build message (Samsung One UI Card Design) ───────────
     lines = []
     
-    # ═══ HEADER (Author & Date) ═══
-    lines.append(f"🎵 <b>{nickname}</b>  🗓 {formatted_date}")
+    # ═══ HEADER: Author Badge & Date ═══
+    if raw_username != raw_nickname:
+        lines.append(f"👤 <b>{nickname}</b>  ·  <code>@{username}</code>")
+    else:
+        lines.append(f"👤 <b>{nickname}</b>")
+    lines.append(f"🗓 <code>{formatted_date}</code>  ·  {region_flag} <b>{region_name}</b>")
     
-    # Title wrapped in blockquote
+    # Title Card in Blockquote
     title_idx = -1
     if title:
-        display_title = title if len(title) <= 150 else title[:147] + "..."
+        display_title = title if len(title) <= 120 else title[:117] + "..."
         lines.append(f"<blockquote>{display_title}</blockquote>")
         title_idx = len(lines) - 1
     
-    # Music info
+    # Audio Track Badge
     if music_title:
-        music_display = f"🎧 {music_title}"
-        if duration:
-            music_display += f" • {_format_duration(duration)}"
-        lines.append(music_display)
+        dur_str = f" <code>• {_format_duration(duration)}</code>" if duration > 0 else ""
+        lines.append(f"🎧 <i>{music_title}</i>{dur_str}")
     
     lines.append("")
     
-    # ═══ STATISTICS ═══
-    lines.append("📊 <b>Statistics</b>")
-    lines.append(f"• 👁 <b>{_format_number(views)}</b> Views")
-    lines.append(f"• 🤍 <b>{_format_number(likes)}</b> Likes")
-    lines.append(f"• 💬 <b>{_format_number(comments)}</b> Comments")
-    lines.append(f"• 🔖 <b>{_format_number(favorites)}</b> Favorites")
-    lines.append(f"• ↗️ <b>{_format_number(shares)}</b> Shares")
-    lines.append(f"• 📥 <b>{_format_number(downloads)}</b> Downloads")
-    lines.append("")
+    # ═══ ONE UI CARD 1: Statistics & Engagement ═══
+    stat_card = (
+        "<blockquote>📊 <b>Statistics & Engagement</b>\n"
+        f"• 👁 <b>{_format_number(views)}</b> Views  • 🤍 <b>{_format_number(likes)}</b> Likes\n"
+        f"• 💬 <b>{_format_number(comments)}</b> Comments  • 🔖 <b>{_format_number(favorites)}</b> Saves\n"
+        f"• ↗️ <b>{_format_number(shares)}</b> Shares  • 📥 <b>{_format_number(downloads)}</b> Downloads</blockquote>"
+    )
+    lines.append(stat_card)
     
-    # ═══ INFORMATION ═══
-    lines.append("📋 <b>Information</b>")
-    lines.append(f"• 🆔 ID | <code>{video_id}</code>")
-    lines.append(f"• 📥 Source | {source}")
-    lines.append(f"• 📍 Region | {region_flag} {region_name}")
-    lines.append(f"• 🛡️ Shadow ban | {shadow_ban}")
-    if tiktok_data.get("is_ad"):
-        lines.append(f"• 📢 Ad | Yes")
-    lines.append("")
+    # Format VQ Score where 0 = No Compress (Lossless / Pristine Quality)
+    raw_vq = float(tiktok_data.get("vq_score") or vq_score or 0.0)
+    if raw_vq > 0:
+        comp_score = max(0.0, round(100.0 - raw_vq, 2))
+    else:
+        calc_q = float(video_quality.get("vq_score") or 70.0)
+        comp_score = max(0.0, round(100.0 - calc_q, 2))
+
+    if comp_score <= 0.5:
+        vq_display = "0 (No Compress)"
+    else:
+        vq_display = f"{comp_score:.2f}"
+
+    # ═══ ONE UI CARD 2: System Specifications ═══
+    orig_str = f"{orig_width}×{orig_height}" if (orig_width > 0 and orig_height > 0) else "Auto"
+    spec_card = (
+        "<blockquote>📋 <b>Specifications</b>\n"
+        f"• 🆔 <code>{video_id}</code>  ·  🛡️ {shadow_ban}\n"
+        f"• 🌐 Browser : <code>{browser_q}</code>  ·  📱 Phone : <code>{phone_q}</code>\n"
+        f"• 📐 Master : <code>{orig_str}</code>\n"
+        f"• ⚡ VQ Score : <b>{vq_display}</b></blockquote>"
+    )
+    lines.append(spec_card)
     
-    # ═══ QUALITY ═══
-    lines.append("☆ <b>Quality</b>")
-    lines.append(f"• 🌐 Browser | {browser_q}")
-    lines.append(f"• 📱 Phone | {phone_q}")
-    
-    # Native Telegram Expandable Blockquote for Quality Streams
+    # ═══ ONE UI CARD 3: Native Expandable Quality Streams ═══
     quote_lines = []
     if bitrate_info:
         for b in bitrate_info:
@@ -300,36 +310,14 @@ def format_analysis_message(
     if quote_lines and quote_lines[-1] == "":
         quote_lines.pop()
 
-    # Expandable blockquote container allows tapping anywhere on the container to expand/collapse
-    lines.append("<blockquote expandable>" + "\n".join(quote_lines) + "</blockquote>")
+    stream_count = len(bitrate_info) if bitrate_info else 1
+    lines.append(f"<blockquote expandable>☆ <b>Stream Profiles ({stream_count})</b>\n" + "\n".join(quote_lines) + "</blockquote>")
     
-    if orig_width > 0 and orig_height > 0:
-        lines.append(f"| Original | {orig_width}x{orig_height}")
-    
-    # Format VQ Score where 0 = No Compress (Lossless / Pristine Quality)
-    raw_vq = float(tiktok_data.get("vq_score") or vq_score or 0.0)
-    if raw_vq > 0:
-        comp_score = max(0.0, round(100.0 - raw_vq, 2))
-    else:
-        calc_q = float(video_quality.get("vq_score") or 70.0)
-        comp_score = max(0.0, round(100.0 - calc_q, 2))
-
-    if comp_score <= 0.5:
-        vq_display = "0 (No Compress)"
-    else:
-        vq_display = f"{comp_score:.2f}"
-
-    lines.append(f"| VQ Score | {vq_display}")
-    lines.append("")
-    
-    # ═══ CATEGORIES ═══
+    # ═══ ONE UI TAGS: Categories ═══
     cat_idx = -1
     if categories:
-        cat_lines = ["🏷️ <b>Categories</b>"]
-        for cat in categories:
-            cat_lines.append(f"• {cat}")
         cat_idx = len(lines)
-        lines.append("\n".join(cat_lines))
+        lines.append(f"🏷️ <code>{', '.join(categories)}</code>")
     
     full_msg = "\n".join(lines)
     # Ensure message is strictly <= 1024 characters for Telegram video captions
