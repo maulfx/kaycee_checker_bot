@@ -136,7 +136,7 @@ def format_analysis_message(
     video_url = tiktok_data.get("original_url") or f"https://www.tiktok.com/@{raw_username}/video/{raw_video_id}"
     
     # Escape HTML special characters
-    username_upper = html.escape(str(raw_username)).upper()
+    author_name = html.escape(str(raw_nickname or raw_username))
     title = html.escape(str(raw_title))
     formatted_date = html.escape(str(raw_formatted_date))
     video_id = html.escape(str(raw_video_id))
@@ -192,8 +192,8 @@ def format_analysis_message(
     # ─── Build message ────────────────────────────────────────
     lines = []
     
-    # Header: 🎵 SKYRUL  🗓️ 31 August 2026, 05:10:55
-    lines.append(f"{ce('music_note', '🎵')} <b>{username_upper}</b>  {ce('calendar', '🗓️')} {formatted_date}")
+    # Header: 🎵 skyrul  🗓️ 31 August 2026, 05:10:55
+    lines.append(f"{ce('music_note', '🎵')} <b>{author_name}</b>  {ce('calendar', '🗓️')} {formatted_date}")
     
     # Title in Blockquote (Italic)
     if title:

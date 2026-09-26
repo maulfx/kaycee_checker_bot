@@ -92,7 +92,8 @@ def _build_info_caption(data: dict) -> str:
     Matches the modern reference UI layout.
     """
     raw_username = data.get("author_username", "Unknown")
-    username_upper = html_module.escape(str(raw_username)).upper()
+    raw_nickname = data.get("author_nickname") or raw_username
+    author_name = html_module.escape(str(raw_nickname))
     formatted_date = html_module.escape(str(data.get("formatted_date", "Unknown")))
     title = html_module.escape(str(data.get("title", "")))
     music_title = html_module.escape(str(data.get("music_title", f"original sound - {raw_username}")))
@@ -102,8 +103,8 @@ def _build_info_caption(data: dict) -> str:
     comments = data.get("comments", 0)
 
     lines = []
-    # Header: 🎵 SKYRUL  🗓️ 31 August 2026, 05:10:55
-    lines.append(f"{ce('music_note', '🎵')} <b>{username_upper}</b>  {ce('calendar', '🗓️')} {formatted_date}")
+    # Header: 🎵 skyrul  🗓️ 31 August 2026, 05:10:55
+    lines.append(f"{ce('music_note', '🎵')} <b>{author_name}</b>  {ce('calendar', '🗓️')} {formatted_date}")
 
     # Caption in blockquote (Italic)
     if title:
