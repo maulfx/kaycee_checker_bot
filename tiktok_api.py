@@ -1,21 +1,17 @@
 """
-TikTok API module - Multi-Engine Data Extractor.
-Attempts data fetching using multiple provider engines:
-1. Engine 1: Direct Web Rehydration Scraper via curl_cffi (Full stats, region, resolution, bitrate, audio)
-2. Engine 2: TikWM API via HTTP / fallback
-3. Engine 3: TikTok oEmbed + SaveTik / SSSTik fallback scraper
+TikTok API module - Direct Raw Data & Stream Extractor.
+Extracts official uncompressed master streams directly from TikTok ByteDance servers:
+1. Primary: Direct Web Rehydration Scraper via curl_cffi Safari impersonation
+2. Secondary: Direct yt-dlp metadata & stream protocol extractor
 """
 
 import re
 import json
-import httpx
 import logging
 import asyncio
 from datetime import datetime
-from bs4 import BeautifulSoup
 from curl_cffi import requests as curl_requests
 import yt_dlp
-from config import TIKWM_API_URL, TIKWM_API_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -493,243 +489,31 @@ def _extract_tiktok_ytdlp_sync(url: str) -> dict | None:
             }
     except Exception as e:
         logger.warning(f"yt-dlp engine extraction failed: {e}")
-def _enrich_stats_with_tikwm(data: dict, url: str) -> dict:
-    """
-    Enrich data with exact live unrounded statistics and real download_count from TikWM API.
-    TikTok Web returns numbers rounded to hundreds/thousands and omits download count.
-    """
-    try:
-        r = httpx.post(
-            TIKWM_API_URL,
-            data={"url": url, "count": 12, "cursor": 0, "web": 1, "hd": 1},
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept": "application/json",
-            },
-            timeout=8.0
-        )
-        if r.status_code == 200:
-            res = r.json()
-            if res.get("code") == 0 and res.get("data"):
-                d = res.get("data", {})
-                if d.get("play_count") is not None:
-                    data["views"] = int(d.get("play_count", 0) or 0)
-                if d.get("digg_count") is not None:
-                    data["likes"] = int(d.get("digg_count", 0) or 0)
-                if d.get("comment_count") is not None:
-                    data["comments"] = int(d.get("comment_count", 0) or 0)
-                if d.get("collect_count") is not None:
-                    data["favorites"] = int(d.get("collect_count", 0) or 0)
-                if d.get("share_count") is not None:
-                    data["shares"] = int(d.get("share_count", 0) or 0)
-                if d.get("download_count") is not None:
-                    data["downloads"] = int(d.get("download_count", 0) or 0)
-                if not data.get("music_url") and d.get("music_info", {}).get("play"):
-                    data["music_url"] = d.get("music_info", {}).get("play")
-    except Exception as e:
-        logger.debug(f"Failed to enrich stats with TikWM: {e}")
-    return data
-
 
 async def fetch_tiktok_data(url: str) -> dict | None:
     """
-    Fetch comprehensive TikTok video data using multi-engine fallback strategy.
+    Fetch comprehensive TikTok video data directly without third-party proxy fallback engines.
+    1. Primary: Direct Web Rehydration Scraper via curl_cffi Safari impersonation
+    2. Secondary: Direct yt-dlp metadata extractor
     """
     # ─── Engine 1: Direct Web Rehydration Scraper ───────────────
     try:
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(None, _scrape_tiktok_web_sync, url)
         if data and data.get("id"):
-            # Enrich with exact live statistics and download count
-            try:
-                data = await loop.run_in_executor(None, _enrich_stats_with_tikwm, data, url)
-            except Exception as e:
-                logger.debug(f"Enrichment exception: {e}")
             return data
     except Exception as e:
-        logger.warning(f"Engine 1 execution failed: {e}")
+        logger.warning(f"Direct web rehydration scraper exception: {e}")
 
-    # ─── Engine 1.5: yt-dlp Engine ──────────────────────────────
+    # ─── Engine 2: Direct yt-dlp Protocol Extractor ─────────────
     try:
         loop = asyncio.get_running_loop()
         ytdlp_data = await loop.run_in_executor(None, _extract_tiktok_ytdlp_sync, url)
         if ytdlp_data and ytdlp_data.get("id"):
-            try:
-                ytdlp_data = await loop.run_in_executor(None, _enrich_stats_with_tikwm, ytdlp_data, url)
-            except Exception as e:
-                logger.debug(f"yt-dlp enrichment exception: {e}")
             return ytdlp_data
     except Exception as e:
-        logger.warning(f"yt-dlp engine failed: {e}")
+        logger.warning(f"Direct yt-dlp engine failed: {e}")
 
-    # ─── Engine 2: TikWM API ─────────────────────────────────────
-    try:
-        async with httpx.AsyncClient(timeout=TIKWM_API_TIMEOUT, follow_redirects=True) as client:
-            params = {"url": url, "count": 12, "cursor": 0, "web": 1, "hd": 1}
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept": "application/json",
-            }
-            response = await client.post(TIKWM_API_URL, data=params, headers=headers)
-            
-            if response.status_code == 200:
-                result = response.json()
-                if result.get("code") == 0 and result.get("data"):
-                    data = result.get("data", {})
-                    author = data.get("author", {})
-                    music_info = data.get("music_info", {})
-                    create_time = data.get("create_time", 0)
-                    formatted_date = (
-                        datetime.fromtimestamp(create_time).strftime("%d %B %Y, %H:%M:%S")
-                        if create_time else "Unknown"
-                    )
-                    w = data.get("width", 0)
-                    h = data.get("height", 0)
-                    logger.info("Fetched video data via Engine 2 (TikWM)")
-                    return {
-                        "id": str(data.get("id", "")),
-                        "title": data.get("title", ""),
-                        "hashtags": _parse_hashtags(data.get("title", "")),
-                        "duration": data.get("duration", 0),
-                        "create_time": create_time,
-                        "formatted_date": formatted_date,
-                        "author_username": author.get("unique_id", ""),
-                        "author_nickname": author.get("nickname", ""),
-                        "author_avatar": author.get("avatar", ""),
-                        "views": data.get("play_count", 0),
-                        "likes": data.get("digg_count", 0),
-                        "comments": data.get("comment_count", 0),
-                        "favorites": data.get("collect_count", 0),
-                        "shares": data.get("share_count", 0),
-                        "downloads": data.get("download_count", 0),
-                        "play_url": data.get("play", ""),
-                        "hdplay_url": data.get("hdplay", ""),
-                        "wmplay_url": data.get("wmplay", ""),
-                        "cover_url": data.get("cover", ""),
-                        "origin_cover_url": data.get("origin_cover", ""),
-                        "width": w,
-                        "height": h,
-                        "size": data.get("size", 0),
-                        "hd_size": data.get("hd_size", 0),
-                        "wm_size": data.get("wm_size", 0),
-                        "bitrate_kbps": 0,
-                        "codec": "h264",
-                        "bitrate_info": [],
-                        "browser_quality": _calculate_quality_tier_string(w, h, 30, "browser"),
-                        "phone_quality": _calculate_quality_tier_string(w, h, 60 if h >= 1080 or w >= 1080 else 30, "phone"),
-                        "music_title": music_info.get("title", ""),
-                        "music_author": music_info.get("author", ""),
-                        "music_url": music_info.get("play", ""),
-                        "music_is_original": music_info.get("original", False),
-                        "music_duration": music_info.get("duration", 0),
-                        "region": str(data.get("region", "ID")).upper(),
-                        "source": _detect_source(w, h),
-                        "is_ad": data.get("is_ad", False),
-                        "original_url": url,
-                    }
-    except Exception as e:
-        logger.warning(f"Engine 2 (TikWM) failed: {e}")
+    logger.error("Could not fetch TikTok data using direct engines.")
+    return None
 
-    # ─── Engine 3: Fallback (TikTok oEmbed + SaveTik Scraper) ─────
-    logger.info("Attempting Engine 3 (TikTok oEmbed + SaveTik Scraper)...")
-    try:
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
-                "Accept-Language": "en-US,en;q=0.9",
-            }
-            
-            id_match = re.search(r'/video/(\d+)', url) or re.search(r'/photo/(\d+)', url)
-            video_id = id_match.group(1) if id_match else ""
-            
-            oembed_data = {}
-            try:
-                import urllib.parse
-                enc_url = urllib.parse.quote(url, safe="")
-                r_oembed = await client.get(f"https://www.tiktok.com/oembed?url={enc_url}", headers=headers)
-                if r_oembed.status_code == 200:
-                    oembed_data = r_oembed.json()
-            except Exception as e:
-                logger.warning(f"TikTok oEmbed failed: {e}")
-            
-            play_url = ""
-            hdplay_url = ""
-            music_url = ""
-            avatar_url = ""
-            
-            try:
-                r_savetik = await client.post("https://savetik.co/api/ajaxSearch", data={"q": url}, headers=headers)
-                if r_savetik.status_code == 200:
-                    res_json = r_savetik.json()
-                    html_content = res_json.get("data", "")
-                    soup = BeautifulSoup(html_content, "html.parser")
-                    for a in soup.find_all("a", href=True):
-                        txt = a.get_text(strip=True).lower()
-                        href = a["href"]
-                        if "mp4 hd" in txt:
-                            hdplay_url = href
-                        elif "mp4" in txt and not play_url:
-                            play_url = href
-                        elif "mp3" in txt:
-                            music_url = href
-            except Exception as e:
-                logger.warning(f"SaveTik failed: {e}")
-
-            if not play_url and not hdplay_url and not oembed_data:
-                logger.error("All TikTok API engines failed to retrieve video data")
-                return None
-            
-            title = oembed_data.get("title", "")
-            author_username = oembed_data.get("author_unique_id") or (url.split("@")[1].split("/")[0] if "@" in url else "Unknown")
-            author_nickname = oembed_data.get("author_name") or author_username
-            cover_url = oembed_data.get("thumbnail_url", "")
-            w = int(oembed_data.get("thumbnail_width", 0) or 0)
-            h = int(oembed_data.get("thumbnail_height", 0) or 0)
-            music_title = f"original sound - {author_nickname}"
-            
-            logger.info("Fetched TikTok video data via Engine 3 (Fallback)")
-            return {
-                "id": video_id or str(oembed_data.get("embed_product_id", "Unknown")),
-                "title": title,
-                "hashtags": _parse_hashtags(title),
-                "duration": 0,
-                "create_time": 0,
-                "formatted_date": datetime.now().strftime("%d %B %Y, %H:%M:%S"),
-                "author_username": author_username,
-                "author_nickname": author_nickname,
-                "author_avatar": avatar_url,
-                "views": 0,
-                "likes": 0,
-                "comments": 0,
-                "favorites": 0,
-                "shares": 0,
-                "downloads": 0,
-                "play_url": play_url or hdplay_url,
-                "hdplay_url": hdplay_url or play_url,
-                "wmplay_url": "",
-                "cover_url": cover_url,
-                "origin_cover_url": cover_url,
-                "width": w,
-                "height": h,
-                "size": 0,
-                "hd_size": 0,
-                "wm_size": 0,
-                "bitrate_kbps": 0,
-                "codec": "h264",
-                "bitrate_info": [],
-                "browser_quality": _calculate_quality_tier_string(w, h, 30, "browser"),
-                "phone_quality": _calculate_quality_tier_string(w, h, 30, "phone"),
-                "music_title": music_title,
-                "music_author": author_nickname,
-                "music_url": music_url,
-                "music_is_original": True,
-                "music_duration": 0,
-                "region": "ID",
-                "source": _detect_source(w, h),
-                "is_ad": False,
-                "original_url": url,
-            }
-            
-    except Exception as e:
-        logger.error(f"Engine 3 failed: {e}", exc_info=True)
-        return None

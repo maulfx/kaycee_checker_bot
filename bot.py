@@ -467,9 +467,9 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def _download_tiktok_video_bytes(orig_url: str, fallback_url: str = "", quality: str = "best") -> bytes | None:
     """
-    High-fidelity raw master video downloader.
-    Prioritizes direct uncompressed stream extraction (via yt-dlp master feed & direct ByteDance CDN headers)
-    to prevent third-party compression/downscaling, with TikWM proxy as a tertiary fallback.
+    High-fidelity direct raw master video downloader.
+    Downloads uncompressed master streams directly from TikTok ByteDance servers (yt-dlp master feed & direct CDN)
+    without using any third-party proxy fallback engines.
     """
     loop = asyncio.get_running_loop()
 
@@ -534,23 +534,6 @@ async def _download_tiktok_video_bytes(orig_url: str, fallback_url: str = "", qu
                 return cdn_res
         except Exception as e:
             logger.debug(f"Direct stream download error: {e}")
-
-    # 3. Tertiary Fallback Engine: TikWM API
-    if orig_url:
-        try:
-            async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
-                r = await client.post("https://www.tikwm.com/api/", data={"url": orig_url, "hd": 1})
-                if r.status_code == 200:
-                    data = r.json().get("data", {})
-                    dl_url = data.get("hdplay") or data.get("play")
-                    if dl_url:
-                        if dl_url.startswith("/"):
-                            dl_url = "https://www.tikwm.com" + dl_url
-                        r_vid = await client.get(dl_url, headers={"User-Agent": "Mozilla/5.0"})
-                        if r_vid.status_code == 200 and len(r_vid.content) > 1000:
-                            return r_vid.content
-        except Exception as e:
-            logger.debug(f"TikWM video buffer fallback error: {e}")
 
     return None
 
