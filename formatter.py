@@ -114,6 +114,20 @@ def _get_stream_resolution_label(w: int, h: int, fps: int, gear: str = "") -> st
     return f"{res}{stream_fps}"
 
 
+def _get_gear_device_icon(gear: str) -> str:
+    """Determine device icon (Phone / Browser / Both) for stream gear."""
+    g = gear.lower()
+    if "normal" in g:
+        return ce("globe", "🌐")
+    elif "lower" in g or "lowest" in g or "bytevc1" in g:
+        return ce("phone", "📱")
+    elif "adapt" in g:
+        return f"{ce('globe', '🌐')} {ce('phone', '📱')}"
+    elif "play_addr" in g:
+        return f"{ce('globe', '🌐')} {ce('phone', '📱')}"
+    return ce("phone", "📱")
+
+
 def format_analysis_message(
     tiktok_data: dict,
     video_quality: dict,
@@ -243,8 +257,9 @@ def format_analysis_message(
             bitrate_str = _format_bitrate_str(b_bitrate)
             res_str = _get_stream_resolution_label(b_w, b_h, b_fps, gear)
 
+            dev_icon = _get_gear_device_icon(gear)
             pad_str = FULL_WIDTH_PAD if idx == 0 else ""
-            quote_lines.append(f"{ce('globe', '🌐')} <b>{gear}</b>{pad_str}")
+            quote_lines.append(f"{dev_icon} <b>{gear}</b>{pad_str}")
             quote_lines.append(f"<code>{res_str}</code> • <code>{bitrate_str}</code> • <code>{b_codec}</code> • <code>{size_str}</code>")
     else:
         max_d = max(orig_width, orig_height)
@@ -253,7 +268,7 @@ def format_analysis_message(
         size_bytes = (bitrate_kbps * 1000 / 8.0) * duration if (duration > 0 and bitrate_kbps > 0) else file_size
         size_str = _format_file_size_str(size_bytes) if size_bytes > 0 else "4.5 MB"
         
-        quote_lines.append(f"{ce('globe', '🌐')} <b>play_addr</b>{FULL_WIDTH_PAD}")
+        quote_lines.append(f"{ce('phone', '📱')} <b>play_addr</b>{FULL_WIDTH_PAD}")
         quote_lines.append(f"<code>{res_str}</code> • <code>{bitrate_str}</code> • <code>{codec}</code> • <code>{size_str}</code>")
 
     lines.append(f"<blockquote expandable>\n" + "\n".join(quote_lines) + "\n</blockquote>")
