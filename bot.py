@@ -467,9 +467,75 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def _download_tiktok_video_bytes(orig_url: str, fallback_url: str = "", quality: str = "best") -> bytes | None:
     """
-    Robust video downloader using TikWM API + direct headers + yt-dlp fallback to bypass TikTok 403 CDN errors.
+    High-fidelity raw master video downloader.
+    Prioritizes direct uncompressed stream extraction (via yt-dlp master feed & direct ByteDance CDN headers)
+    to prevent third-party compression/downscaling, with TikWM proxy as a tertiary fallback.
     """
-    # 1. Try TikWM API first (fastest)
+    loop = asyncio.get_running_loop()
+
+    # 1. Primary Engine: yt-dlp (Extracts raw ByteDance master feed bit-for-bit without proxy compression)
+    if orig_url:
+        try:
+            import yt_dlp
+            import tempfile
+            import os
+
+            def _ytdlp_dl():
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    outpath = os.path.join(tmpdir, "vid.mp4")
+                    format_opt = "bestvideo+bestaudio/best"
+                    if quality == "720":
+                        format_opt = "bestvideo[height<=720]+bestaudio/best[height<=720]/best"
+                    elif quality in ("540", "480"):
+                        format_opt = "bestvideo[height<=576]+bestaudio/best[height<=576]/best"
+
+                    ydl_opts = {
+                        "quiet": True,
+                        "no_warnings": True,
+                        "outtmpl": outpath,
+                        "format": format_opt,
+                        "socket_timeout": 30,
+                        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+                    }
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([orig_url])
+                    if os.path.exists(outpath):
+                        with open(outpath, "rb") as f:
+                            return f.read()
+                return None
+
+            res = await loop.run_in_executor(None, _ytdlp_dl)
+            if res and len(res) > 5000:
+                return res
+        except Exception as e:
+            logger.warning(f"yt-dlp raw master download error: {e}")
+
+    # 2. Secondary Engine: Direct TikTok CDN Origin Stream via curl_cffi / httpx
+    if fallback_url:
+        try:
+            def _direct_cdn_dl():
+                try:
+                    from curl_cffi import requests as curl_requests
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+                        "Referer": "https://www.tiktok.com/",
+                        "Accept": "*/*",
+                        "Range": "bytes=0-",
+                    }
+                    r = curl_requests.get(fallback_url, headers=headers, impersonate="safari17_0", timeout=35)
+                    if r.status_code in (200, 206) and len(r.content) > 5000:
+                        return r.content
+                except Exception as e:
+                    logger.debug(f"curl_cffi direct CDN error: {e}")
+                return None
+
+            cdn_res = await loop.run_in_executor(None, _direct_cdn_dl)
+            if cdn_res:
+                return cdn_res
+        except Exception as e:
+            logger.debug(f"Direct stream download error: {e}")
+
+    # 3. Tertiary Fallback Engine: TikWM API
     if orig_url:
         try:
             async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
@@ -484,55 +550,7 @@ async def _download_tiktok_video_bytes(orig_url: str, fallback_url: str = "", qu
                         if r_vid.status_code == 200 and len(r_vid.content) > 1000:
                             return r_vid.content
         except Exception as e:
-            logger.debug(f"TikWM video buffer download error: {e}")
-
-    # 2. Try direct download if fallback_url provided with proper headers
-    if fallback_url:
-        try:
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
-                "Referer": "https://www.tiktok.com/",
-            }
-            async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-                resp = await client.get(fallback_url, headers=headers)
-                if resp.status_code == 200 and len(resp.content) > 1000:
-                    return resp.content
-        except Exception as e:
-            logger.debug(f"Direct stream download error: {e}")
-
-    # 3. Fallback to yt-dlp
-    if orig_url:
-        try:
-            import yt_dlp
-            import tempfile
-            import os
-            loop = asyncio.get_running_loop()
-            def _ytdlp_dl():
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    outpath = os.path.join(tmpdir, "vid.mp4")
-                    format_opt = "best"
-                    if quality == "720":
-                        format_opt = "best[height<=720]/best"
-                    elif quality == "540":
-                        format_opt = "best[height<=576]/best"
-
-                    ydl_opts = {
-                        "quiet": True,
-                        "no_warnings": True,
-                        "outtmpl": outpath,
-                        "format": format_opt,
-                    }
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        ydl.download([orig_url])
-                    if os.path.exists(outpath):
-                        with open(outpath, "rb") as f:
-                            return f.read()
-                return None
-            res = await loop.run_in_executor(None, _ytdlp_dl)
-            if res:
-                return res
-        except Exception as e:
-            logger.warning(f"yt-dlp video buffer download error: {e}")
+            logger.debug(f"TikWM video buffer fallback error: {e}")
 
     return None
 

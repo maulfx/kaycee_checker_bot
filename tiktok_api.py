@@ -336,6 +336,7 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
             "downloads": downloads,
             "play_url": play_url,
             "hdplay_url": hdplay_url,
+            "download_addr": video.get("downloadAddr", ""),
             "wmplay_url": "",
             "cover_url": video.get("cover", ""),
             "origin_cover_url": video.get("originCover", ""),
