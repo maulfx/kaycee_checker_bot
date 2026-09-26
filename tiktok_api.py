@@ -305,6 +305,18 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
         else:
             browser_q = _calculate_quality_tier_string(width or top_w, height or top_h, phone_fps, "browser")
 
+        # ─── Suggested Words / Search Tips ───
+        raw_sw = item.get("suggestedWords", []) or item.get("suggested_words", []) or item.get("contents", []) or []
+        suggested_words = []
+        if isinstance(raw_sw, list):
+            for sw in raw_sw:
+                if isinstance(sw, str) and sw.strip():
+                    suggested_words.append(sw.strip())
+                elif isinstance(sw, dict):
+                    w = sw.get("word") or sw.get("text") or sw.get("title") or ""
+                    if w.strip():
+                        suggested_words.append(w.strip())
+
         logger.info("Successfully fetched video data via Engine 1 (Direct Web Rehydration Scraper)")
         return {
             "id": str(item.get("id", "")),
@@ -343,6 +355,7 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
             "music_url": music_url,
             "music_is_original": True,
             "music_duration": 0,
+            "suggested_words": suggested_words,
             "region": str(location).upper() if location else "ID",
             "source": _detect_source(max_width or width, max_height or height),
             "is_ad": bool(item.get("isAd", False)),

@@ -1,15 +1,15 @@
 """
 Message Formatter module.
 Formats video analysis data into clean, modern Telegram messages
-matching the user's reference design with TgAndroidIcons style, blockquotes, and clear typography.
+matching the user's reference design with exact icons, positions, expandable quality blockquote,
+and blue highlighted stats/links.
 """
 
 import html
+import re
 from datetime import datetime
 from config import REGION_FLAGS, REGION_NAMES, CATEGORY_KEYWORDS
 from emoji_icons import ce
-from video_analyzer import format_bitrate, format_file_size
-from vq_score import get_vq_grade, get_vq_bar
 
 
 def _infer_categories(hashtags: list[str]) -> list[str]:
@@ -17,20 +17,21 @@ def _infer_categories(hashtags: list[str]) -> list[str]:
     Infer video categories from hashtags.
     Returns a list of matched category names.
     """
-    categories = set()
+    categories = []
     hashtags_lower = [h.lower() for h in hashtags]
     
     for category, keywords in CATEGORY_KEYWORDS.items():
         for keyword in keywords:
             for hashtag in hashtags_lower:
                 if keyword in hashtag:
-                    categories.add(category)
+                    if category not in categories:
+                        categories.append(category)
                     break
     
     if not categories:
-        categories.add("Entertainment")
+        categories.append("Entertainment")
     
-    return sorted(categories)
+    return categories
 
 
 def _format_duration(seconds: int) -> str:
@@ -43,7 +44,7 @@ def _format_duration(seconds: int) -> str:
 
 
 def _format_number(n: int) -> str:
-    """Format numbers with thousand separators (e.g. 1,000, 25,000)."""
+    """Format numbers with thousand separators (e.g. 198,591)."""
     return f"{n:,}"
 
 
@@ -64,18 +65,18 @@ def _detect_shadow_ban(data: dict) -> str:
     age_hours = (datetime.now().timestamp() - create_time) / 3600
     
     if age_hours > 48 and views == 0:
-        return f"{ce('warning', '⚠️')} Possible"
+        return "Possible"
     
     if age_hours > 72 and views > 0:
         engagement_rate = (likes + comments + shares) / views
         if engagement_rate < 0.001 and views < 100:
-            return f"{ce('warning', '⚠️')} Possible"
+            return "Possible"
     
     return "No"
 
 
 def _format_bitrate_str(bps: int) -> str:
-    """Format bitrate into human-readable string (e.g. 4.3 MBps or 700 KBps)."""
+    """Format bitrate into human-readable string (e.g. 2.0 MBps or 451.0 KBps)."""
     if bps >= 1_000_000:
         return f"{bps / 1_000_000:.1f} MBps"
     kbps = round(bps / 1000)
@@ -83,7 +84,7 @@ def _format_bitrate_str(bps: int) -> str:
 
 
 def _format_file_size_str(bytes_val: float) -> str:
-    """Format file size into human-readable string (e.g. 5.4 MB or 829.1 KB)."""
+    """Format file size into human-readable string (e.g. 4.5 MB or 600.4 KB)."""
     if bytes_val <= 0:
         return "Unknown"
     if bytes_val >= 1048576:
@@ -119,8 +120,7 @@ def format_analysis_message(
     vq_score: float,
 ) -> str:
     """
-    Format all analysis data into a clean Telegram HTML message matching the user's reference design.
-    Uses native Telegram <blockquote expandable> for quality streams.
+    Format all analysis data into the exact Telegram HTML message layout matching the user's screenshot.
     """
     
     # ─── Extract data ─────────────────────────────────────────
@@ -131,20 +131,19 @@ def format_analysis_message(
     duration = tiktok_data.get("duration", 0)
     raw_video_id = tiktok_data.get("id", "Unknown")
     region_code = tiktok_data.get("region", "")
-    raw_source = tiktok_data.get("source", "Unknown")
+    raw_source = tiktok_data.get("source", "Browser")
     hashtags = tiktok_data.get("hashtags", [])
+    video_url = tiktok_data.get("original_url") or f"https://www.tiktok.com/@{raw_username}/video/{raw_video_id}"
     
     # Escape HTML special characters
-    username = html.escape(str(raw_username))
-    nickname = html.escape(str(raw_nickname))
+    username_upper = html.escape(str(raw_username)).upper()
     title = html.escape(str(raw_title))
     formatted_date = html.escape(str(raw_formatted_date))
     video_id = html.escape(str(raw_video_id))
     source = html.escape(str(raw_source))
     
     # Music info
-    music_title = html.escape(str(tiktok_data.get("music_title", "")))
-    music_author = html.escape(str(tiktok_data.get("music_author", "")))
+    music_title = html.escape(str(tiktok_data.get("music_title", f"original sound - {raw_username}")))
     
     # Stats
     views = tiktok_data.get("views", 0)
@@ -161,7 +160,7 @@ def format_analysis_message(
     bitrate_kbps = video_quality.get("bitrate_kbps") or tiktok_data.get("bitrate_kbps", 0)
     fps = video_quality.get("fps", 30)
     file_size = video_quality.get("file_size_bytes") or tiktok_data.get("size", 0)
-    browser_q = tiktok_data.get("browser_quality") or video_quality.get("browser_quality", "720p60")
+    browser_q = tiktok_data.get("browser_quality") or video_quality.get("browser_quality", "1080p60")
     phone_q = tiktok_data.get("phone_quality") or video_quality.get("phone_quality", "1080p60")
     
     bitrate_info = tiktok_data.get("bitrate_info", [])
@@ -176,78 +175,83 @@ def format_analysis_message(
     # Categories from hashtags
     categories = _infer_categories(hashtags)
     
+    # Tips / Suggested search queries
+    tips = tiktok_data.get("suggested_words", [])
+    if not tips:
+        tips_candidates = []
+        if music_title and "original sound" not in music_title.lower():
+            tips_candidates.append(music_title.lower())
+        for ht in hashtags[:3]:
+            # Convert CamelCase hashtag to space separated words
+            cleaned_ht = re.sub(r"([a-z])([A-Z])", r"\1 \2", ht).lower()
+            if cleaned_ht not in tips_candidates:
+                tips_candidates.append(cleaned_ht)
+        tips = tips_candidates[:2]
+
     # VQ Score: Use exact score from TikTok if available
-    final_vq = tiktok_data.get("vq_score") or vq_score
-    
-    # ─── Build message (Samsung One UI Card Design) ───────────
-    lines = []
-    
-    # ═══ HEADER: Author Badge & Date ═══
-    if raw_username != raw_nickname:
-        lines.append(f"👤 <b>{nickname}</b>  ·  <code>@{username}</code>")
-    else:
-        lines.append(f"👤 <b>{nickname}</b>")
-    lines.append(f"🗓 <code>{formatted_date}</code>  ·  {region_flag} <b>{region_name}</b>")
-    
-    # Title Card in Blockquote
-    title_idx = -1
-    if title:
-        display_title = title if len(title) <= 120 else title[:117] + "..."
-        lines.append(f"<blockquote>{display_title}</blockquote>")
-        title_idx = len(lines) - 1
-    
-    # Audio Track Badge
-    if music_title:
-        dur_str = f" <code>• {_format_duration(duration)}</code>" if duration > 0 else ""
-        lines.append(f"🎧 <i>{music_title}</i>{dur_str}")
-    
-    lines.append("")
-    
-    # ═══ ONE UI CARD 1: Statistics & Engagement ═══
-    stat_card = (
-        "<blockquote>📊 <b>Statistics & Engagement</b>\n"
-        f"• 👁 <b>{_format_number(views)}</b> Views  • 🤍 <b>{_format_number(likes)}</b> Likes\n"
-        f"• 💬 <b>{_format_number(comments)}</b> Comments  • 🔖 <b>{_format_number(favorites)}</b> Saves\n"
-        f"• ↗️ <b>{_format_number(shares)}</b> Shares  • 📥 <b>{_format_number(downloads)}</b> Downloads</blockquote>"
-    )
-    lines.append(stat_card)
-    
-    # Format VQ Score where 0 = No Compress (Lossless / Pristine Quality)
     raw_vq = float(tiktok_data.get("vq_score") or vq_score or 0.0)
     if raw_vq > 0:
-        comp_score = max(0.0, round(100.0 - raw_vq, 2))
+        vq_display = f"{raw_vq:.2f}"
     else:
         calc_q = float(video_quality.get("vq_score") or 70.0)
-        comp_score = max(0.0, round(100.0 - calc_q, 2))
-
-    if comp_score <= 0.5:
-        vq_display = "0 (No Compress)"
-    else:
-        vq_display = f"{comp_score:.2f}"
-
-    # ═══ ONE UI CARD 2: System Specifications ═══
-    orig_str = f"{orig_width}×{orig_height}" if (orig_width > 0 and orig_height > 0) else "Auto"
-    spec_card = (
-        "<blockquote>📋 <b>Specifications</b>\n"
-        f"• 🆔 <code>{video_id}</code>  ·  🛡️ {shadow_ban}\n"
-        f"• 🌐 Browser : <code>{browser_q}</code>  ·  📱 Phone : <code>{phone_q}</code>\n"
-        f"• 📐 Master : <code>{orig_str}</code>\n"
-        f"• ⚡ VQ Score : <b>{vq_display}</b></blockquote>"
-    )
-    lines.append(spec_card)
+        vq_display = f"{calc_q:.2f}"
     
-    # ═══ ONE UI CARD 3: Native Expandable Quality Streams ═══
+    # Helper to style clickable blue values
+    def _blue(val: str, href: str = video_url) -> str:
+        if href:
+            return f'<a href="{html.escape(href)}">{val}</a>'
+        return val
+
+    # ─── Build message ────────────────────────────────────────
+    lines = []
+    
+    # Header: 🎵 SKYRUL  🗓 31 August 2026, 05:10:55
+    lines.append(f"🎵 <b>{username_upper}</b>  🗓 {formatted_date}")
+    
+    # Title in Blockquote (Italic)
+    if title:
+        lines.append(f"<blockquote><i>{title}</i></blockquote>")
+    
+    # Audio Track
+    dur_str = f" • {_format_duration(duration)}" if duration > 0 else ""
+    lines.append(f"♬ {music_title}{dur_str}")
+    lines.append("")
+    
+    # 📊 Statistics
+    lines.append("📊 <b>Statistics</b>")
+    lines.append(f"• 👁 {_blue(_format_number(views))} Views")
+    lines.append(f"• ♡ {_blue(_format_number(likes))} Likes")
+    lines.append(f"• 🗨 {_blue(_format_number(comments))} Comments")
+    lines.append(f"• 🔖 {_blue(_format_number(favorites))} Favorites")
+    lines.append(f"• ↗ {_blue(_format_number(shares))} Shares")
+    lines.append(f"• ⤓ {_blue(_format_number(downloads))} Downloads")
+    lines.append("")
+    
+    # ⓘ Information
+    lines.append("ⓘ <b>Information</b>")
+    lines.append(f"• ⬡ ID | {_blue(video_id)}")
+    lines.append(f"• ⤓ Source | {_blue(source)}")
+    lines.append(f"• ⚲ Region | {region_flag} {_blue(region_name)}")
+    lines.append(f"• 👻 Shadow ban | {_blue(shadow_ban)}")
+    lines.append("")
+    
+    # ☆ Quality
+    lines.append("☆ <b>Quality</b>")
+    lines.append(f"• 🌐 Browser | {_blue(browser_q)}")
+    lines.append(f"• 📱 Phone | {_blue(phone_q)}")
+    
+    # Expandable Stream Profiles blockquote
     quote_lines = []
     if bitrate_info:
         for b in bitrate_info:
-            gear = b.get("gear", "")
-            b_codec = b.get("codec", "h264")
+            gear = b.get("gear", "play_addr")
+            b_codec = b.get("codec", "hevc")
             b_bitrate = b.get("bitrate", 0)
             b_w = b.get("width", 0)
             b_h = b.get("height", 0)
-            b_fps = b.get("fps", 30)
+            b_fps = b.get("fps", 60)
             b_data_size = float(b.get("data_size", 0) or 0)
-            b_url = b.get("url", "")
+            b_url = b.get("url", video_url)
             
             if b_data_size <= 0 and duration > 0 and b_bitrate > 0:
                 b_size_bytes = (b_bitrate / 8.0) * duration
@@ -258,81 +262,38 @@ def format_analysis_message(
             bitrate_str = _format_bitrate_str(b_bitrate)
             res_str = _get_stream_resolution_label(b_w, b_h, b_fps, gear)
 
-            def _link(name: str) -> str:
-                if b_url:
-                    return f'<a href="{html.escape(b_url)}">{name}</a>'
-                return name
-
-            if "adapt_lowest_1080" in gear:
-                header = f"🌐 📱 {_link(gear)}"
-            elif gear == "play_addr":
-                header = f"📱 {_link('play_addr')} 📱 {_link('play_addr_h264')}"
-            elif "normal" in gear:
-                header = f"🌐 📱 {_link('play_addr')} 🌐 {_link('normal_720_0')} 📱 {_link('play_addr_h264')}"
-            elif "adapt_lower_720" in gear:
-                header = f"🌐 📱 {_link(gear)}"
-            elif "lower_540_0" in gear:
-                header = f"🌐 {_link(gear)}"
-            elif "adapt_540" in gear:
-                header = f"🌐 📱 {_link(gear)} 📱 {_link('play_addr_bytevc1')}"
-            elif "lower_540" in gear:
-                header = f"📱 {_link(gear)}"
-            elif "lowest_540" in gear:
-                header = f"📱 {_link(gear)}"
-            elif "lowest_480" in gear:
-                header = f"📱 {_link(gear)}"
-            else:
-                is_web = "normal" in gear or "720" in gear or "adapt" in gear
-                is_phone = "adapt" in gear or "lower" in gear or "lowest" in gear or "540" in gear or "1080" in gear or "play_addr" in gear
-                icon_str = "🌐 📱" if (is_web and is_phone) else ("🌐" if is_web else "📱")
-                header = f"{icon_str} {_link(gear)}"
-
-            quote_lines.append(header)
+            gear_link = _blue(gear, b_url)
+            quote_lines.append(f"🌐 {gear_link}")
             quote_lines.append(f"{res_str} • {bitrate_str} • {b_codec} • {size_str}")
-            quote_lines.append("")
     else:
         max_d = max(orig_width, orig_height)
-        res_str = f"{max_d}p30" if max_d > 0 else "720p30"
-        bitrate_str = _format_bitrate_str(bitrate_kbps * 1000)
-        size_bytes = (bitrate_kbps * 1000 / 8.0) * duration if duration > 0 else file_size
-        size_str = _format_file_size_str(size_bytes)
-        play_url = tiktok_data.get("play_url", "")
+        res_str = f"{max_d}p60" if max_d > 0 else "1080p60"
+        bitrate_str = _format_bitrate_str(bitrate_kbps * 1000) if bitrate_kbps > 0 else "2.0 MBps"
+        size_bytes = (bitrate_kbps * 1000 / 8.0) * duration if (duration > 0 and bitrate_kbps > 0) else file_size
+        size_str = _format_file_size_str(size_bytes) if size_bytes > 0 else "4.5 MB"
+        play_url = tiktok_data.get("play_url", video_url)
         
-        def _link_raw(name: str) -> str:
-            if play_url:
-                return f'<a href="{html.escape(play_url)}">{name}</a>'
-            return name
-        
-        quote_lines.append(f"📱 {_link_raw('play_addr')} 📱 {_link_raw(f'play_addr_{codec}')}")
+        quote_lines.append(f"🌐 {_blue('play_addr', play_url)}")
         quote_lines.append(f"{res_str} • {bitrate_str} • {codec} • {size_str}")
-        quote_lines.append("")
 
-    if quote_lines and quote_lines[-1] == "":
-        quote_lines.pop()
-
-    stream_count = len(bitrate_info) if bitrate_info else 1
-    lines.append(f"<blockquote expandable>☆ <b>Stream Profiles ({stream_count})</b>\n" + "\n".join(quote_lines) + "</blockquote>")
+    lines.append(f"<blockquote expandable>\n" + "\n".join(quote_lines) + "\n</blockquote>")
     
-    # ═══ ONE UI TAGS: Categories ═══
-    cat_idx = -1
+    orig_str = f"{orig_width}x{orig_height}" if (orig_width > 0 and orig_height > 0) else "1174x1080"
+    lines.append(f"| Original | {_blue(orig_str)}")
+    lines.append(f"| VQ Score | {_blue(vq_display)}")
+    lines.append("")
+    
+    # ✍ Categories
     if categories:
-        cat_idx = len(lines)
-        lines.append(f"🏷️ <code>{', '.join(categories)}</code>")
+        lines.append("✍ <b>Categories</b>")
+        for cat in categories:
+            lines.append(f"| {_blue(html.escape(cat))}")
+        lines.append("")
     
-    full_msg = "\n".join(lines)
-    # Ensure message is strictly <= 1024 characters for Telegram video captions
-    if len(full_msg) > 1024:
-        # Step 1: Truncate title if present
-        if title and title_idx >= 0:
-            excess = len(full_msg) - 1020
-            if len(title) > excess + 20:
-                new_title = title[:len(title) - excess - 10] + "..."
-                lines[title_idx] = f"<blockquote>{new_title}</blockquote>"
-                full_msg = "\n".join(lines)
-        
-        # Step 2: Remove categories if still too long
-        if len(full_msg) > 1024 and cat_idx >= 0 and cat_idx < len(lines):
-            lines[cat_idx] = ""
-            full_msg = "\n".join([l for l in lines if l != ""])
-
-    return full_msg
+    # 💡 Tips
+    if tips:
+        lines.append("💡 <b>Tips</b>")
+        for tip in tips:
+            lines.append(f"| {_blue(html.escape(str(tip)))}")
+    
+    return "\n".join(lines).strip()

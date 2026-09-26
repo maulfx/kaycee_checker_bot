@@ -51,9 +51,9 @@ REGION_NAMES = {
 
 # ─── Category Mapping (hashtag-based inference) ───────────────
 CATEGORY_KEYWORDS = {
-    "Gaming": ["game", "gaming", "gamer", "esport", "gameplay", "xbox", "playstation", "nintendo", "pc"],
     "Video Games": ["genshin", "valorant", "minecraft", "roblox", "fortnite", "codm", "mobilelegends", 
-                    "pubg", "freefire", "honkaistarrail", "zenless", "wuwa", "hoyoverse", "hoyocreators"],
+                    "pubg", "freefire", "honkaistarrail", "zenless", "wuwa", "hoyoverse", "hoyocreators", "hsrcreators", "hsr"],
+    "Games": ["game", "gaming", "gamer", "esport", "gameplay", "xbox", "playstation", "nintendo", "pc", "honkaistarrail", "genshin"],
     "Music": ["music", "song", "singing", "vocal", "guitar", "piano", "beat", "melody", "cover", "remix"],
     "Dance": ["dance", "dancing", "choreography", "kpop", "kpopdance"],
     "Comedy": ["comedy", "funny", "humor", "meme", "joke", "lol", "fyp"],
@@ -62,9 +62,9 @@ CATEGORY_KEYWORDS = {
     "Fashion": ["fashion", "ootd", "style", "outfit", "clothes", "beauty", "makeup", "skincare"],
     "Sports": ["sport", "fitness", "gym", "workout", "football", "basketball", "soccer"],
     "Travel": ["travel", "wanderlust", "explore", "trip", "vacation", "tourism"],
-    "Art": ["art", "drawing", "painting", "illustration", "sketch", "digital", "edit", "genshinedit"],
+    "Art": ["art", "drawing", "painting", "illustration", "sketch", "digital", "edit", "genshinedit", "honkaistarrailedit"],
     "Anime": ["anime", "manga", "otaku", "cosplay", "waifu", "weeb", "tsaritsa"],
-    "Entertainment": ["entertainment", "viral", "trending", "foryou", "fyp", "foryoupage"],
+    "Entertainment": ["entertainment", "viral", "trending", "foryou", "fyp", "foryoupage", "firefly", "hyacine"],
     "Technology": ["tech", "technology", "coding", "programming", "developer", "ai", "gadget"],
     "Pets": ["pet", "cat", "dog", "kitten", "puppy", "animal", "kucing", "anjing"],
 }

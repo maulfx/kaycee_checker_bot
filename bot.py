@@ -88,47 +88,38 @@ def _format_duration(seconds: int) -> str:
 def _build_info_caption(data: dict) -> str:
     """
     Build the caption message that appears above the action buttons.
-    Uses modern Samsung One UI card-based layout.
+    Matches the modern reference UI layout.
     """
     raw_username = data.get("author_username", "Unknown")
-    raw_nickname = data.get("author_nickname", raw_username)
-    username = html_module.escape(str(raw_username))
-    nickname = html_module.escape(str(raw_nickname))
+    username_upper = html_module.escape(str(raw_username)).upper()
     formatted_date = html_module.escape(str(data.get("formatted_date", "Unknown")))
-    region_code = data.get("region", "")
-    region_flag = REGION_FLAGS.get(region_code, "🌐")
-    region_name = REGION_NAMES.get(region_code, region_code or "Unknown")
     title = html_module.escape(str(data.get("title", "")))
-    music_title = data.get("music_title", "")
+    music_title = html_module.escape(str(data.get("music_title", f"original sound - {raw_username}")))
     duration = data.get("duration", 0)
     views = data.get("views", 0)
     likes = data.get("likes", 0)
     comments = data.get("comments", 0)
 
     lines = []
-    # Header: Author Profile & Region
-    if raw_username != raw_nickname:
-        lines.append(f"👤 <b>{nickname}</b>  ·  <code>@{username}</code>")
-    else:
-        lines.append(f"👤 <b>{nickname}</b>")
-    lines.append(f"🗓 <code>{formatted_date}</code>  ·  {region_flag} <b>{region_name}</b>")
+    # Header: 🎵 SKYRUL  🗓 31 August 2026, 05:10:55
+    lines.append(f"🎵 <b>{username_upper}</b>  🗓 {formatted_date}")
 
-    # Caption in blockquote
+    # Caption in blockquote (Italic)
     if title:
-        display_title = title if len(title) <= 200 else title[:197] + "..."
-        lines.append(f"<blockquote>{display_title}</blockquote>")
+        display_title = title if len(title) <= 150 else title[:147] + "..."
+        lines.append(f"<blockquote><i>{display_title}</i></blockquote>")
 
     # Audio badge
-    if music_title:
-        dur_str = f" <code>• {_format_duration(duration)}</code>" if duration > 0 else ""
-        lines.append(f"🎧 <i>{html_module.escape(str(music_title))}</i>{dur_str}")
-
+    dur_str = f" • {_format_duration(duration)}" if duration > 0 else ""
+    lines.append(f"♬ {music_title}{dur_str}")
     lines.append("")
+
     # Quick Insights Card
+    lines.append("📊 <b>Quick Insights</b>")
     lines.append(
-        "<blockquote>📊 <b>Quick Insights</b>\n"
-        f"• 👁 <b>{_format_number(views)}</b> Views  • 🤍 <b>{_format_number(likes)}</b> Likes  • 💬 <b>{_format_number(comments)}</b></blockquote>"
+        f"• 👁 <b>{_format_number(views)}</b> Views  • ♡ <b>{_format_number(likes)}</b> Likes  • 🗨 <b>{_format_number(comments)}</b> Comments"
     )
+    lines.append("")
     lines.append("↓ <b>Select an option below:</b>")
 
     return "\n".join(lines)
@@ -243,6 +234,14 @@ def _build_action_keyboard(data: dict, video_id: str) -> InlineKeyboardMarkup:
     if row1:
         keyboard.append(row1)
     keyboard.extend([row2, row3, row4, row5])
+    return InlineKeyboardMarkup(keyboard)
+
+
+def _build_checker_keyboard(video_id: str) -> InlineKeyboardMarkup:
+    """Build keyboard for the checker result message with a Recheck button."""
+    keyboard = [
+        [InlineKeyboardButton("🔄 Recheck", callback_data=f"recheck_{video_id}")],
+    ]
     return InlineKeyboardMarkup(keyboard)
 
 
