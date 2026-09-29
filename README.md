@@ -1,180 +1,169 @@
-# 🎬 TikTok Video Analyzer Bot
+# 🎬 TikTok Video Analyzer & Downloader Bot
 
-Bot Telegram yang menganalisis kualitas video TikTok secara otomatis. Cukup kirim link video TikTok, bot akan mengirimkan analisis lengkap termasuk statistik, kualitas video, dan VQ Score.
+Bot Telegram modern yang menganalisis kualitas video TikTok secara mendalam dan menyediakan fitur download multi-resolusi. Cukup kirim link video TikTok, bot akan mengirimkan kartu infografis visual, statistik lengkap, analisis kualitas (Phone/Browser tier), dan VQ Score.
 
-![Preview](https://img.shields.io/badge/Platform-Telegram-blue?logo=telegram)
+![Platform](https://img.shields.io/badge/Platform-Telegram-blue?logo=telegram)
 ![Python](https://img.shields.io/badge/Python-3.11+-green?logo=python)
+![License](https://img.shields.io/badge/License-MIT-purple)
 
 ---
 
-## ✨ Fitur
+## ✨ Fitur Utama
 
 | Fitur | Deskripsi |
-|-------|-----------|
-| 📊 **Statistik Lengkap** | Views, likes, komentar, favorit/bookmarks, shares, downloads langsung dari TikTok API |
-| ℹ️ **Informasi & Region** | Video ID, sumber video, region negara (bendera), deteksi potensi shadow ban |
-| ☆ **Analisis Kualitas** | Browser tier, Phone tier, resolusi, codec (HEVC/H.264), bitrate, frame rate (fps), ukuran file |
-| 📱 **Native Expandable Streams** | List resolusi & stream link disajikan dalam container `<blockquote expandable>` yang bisa di-tap langsung |
-| ⚡ **VQ Score Modern** | Skor kompresi (0 = No Compress / Lossless Quality) |
-| 🔄 **In-Place Recheck** | Tombol Recheck interaktif untuk memperbarui analisis tanpa membuat pesan baru |
-| 📥 **Multi-Resolution Download** | Download video instan per resolusi (576p, 720p, 1080p, Original HD) |
-| 🎵 **MP3 & Shazam** | Ekstrak audio MP3 dan deteksi musik otomatis |
-| 🏷 **Deteksi Kategori** | Analisis otomatis topik dan kategori video dari hashtag |
+|---|---|
+| 🖼 **Visual Infographic Card** | Otomatis membuat gambar ringkasan visual HD (Pillow) berisi avatar profil kreator, cover blur, badge Phone/Browser tier, dan indikator skor kompresi |
+| 📊 **Statistik Lengkap** | Menampilkan jumlah views, likes, komentar, bookmarks/favorit, shares, dan downloads langsung dari TikTok |
+| ℹ️ **Info Akun & Region** | Username & nickname kreator, Video ID, negara sumber video (dengan bendera & nama negara), serta deteksi potensi shadow ban |
+| 🔍 **Analisis Kualitas Detail** | Deteksi Phone tier & Browser tier, resolusi native, video codec (AV1/HEVC/H.264), bitrate, frame rate (fps), dan ukuran file |
+| 📱 **Native Expandable Streams** | Daftar stream URL tiap resolusi disajikan rapi dalam container lipat Telegram (`<blockquote expandable>`) yang dapat di-tap langsung |
+| ⚡ **VQ Compression Score** | Skor kompresi video modern (0.0 = *No Compress / Lossless Quality*, semakin rendah semakin jernih kualitas aslinya) |
+| 📥 **Multi-Resolution Download** | Tombol instan untuk mengunduh video per resolusi (**576p**, **720p**, **1080p**, dan **Original HD**) |
+| 🎵 **Audio MP3 & Musik** | Ekstraksi audio MP3 jernih dan deteksi metadata musik / audio latar |
+| 🏷 **Klasifikasi Kategori** | Analisis otomatis topik dan kategori video dari hashtag |
+| 🔄 **In-Place Recheck** | Tombol interaktif untuk memperbarui analisis tanpa membuat pesan baru di chat |
+| 🛡 **Multi-Engine Fallback** | Integrasi TikWM API, yt-dlp, curl_cffi, dan direct scraping untuk kehandalan ekstraksi tanpa hambatan |
 
 ---
 
-## 🚀 Instalasi
+## 🚀 Panduan Instalasi
 
 ### Prasyarat
 
-- **Python 3.11+** ([Download](https://www.python.org/downloads/))
-- **FFmpeg** (opsional, untuk analisis kualitas detail) ([Download](https://ffmpeg.org/download.html))
-- **Token Bot Telegram** (dari [@BotFather](https://t.me/BotFather))
+- **Python 3.11+** ([Download Python](https://www.python.org/downloads/))
+- **FFmpeg / ffprobe** (Sangat disarankan untuk analisis bitrate & codec detail) ([Download FFmpeg](https://ffmpeg.org/download.html))
+- **Token Bot Telegram** (Dapatkan dari [@BotFather](https://t.me/BotFather))
+
+---
 
 ### Langkah Setup
 
-#### 1. Clone/Download project
-
+#### 1. Masuk ke Direktori Project
 ```bash
-cd tiktok-analyzer-bot
+cd kaycee_checker_bot
 ```
 
 #### 2. Buat Virtual Environment
-
 ```bash
+# Buat virtual environment
 python -m venv venv
 
-# Windows
+# Aktivasi di Windows
 venv\Scripts\activate
 
-# macOS/Linux
+# Aktivasi di macOS/Linux
 source venv/bin/activate
 ```
 
-#### 3. Install dependencies
-
+#### 3. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-#### 4. Buat file `.env`
+*(Di Windows, Anda juga dapat menjalankan `setup.bat` untuk setup otomatis).*
 
+#### 4. Konfigurasi Token (`.env`)
+Salin file `.env.example` menjadi `.env`:
 ```bash
-# Salin template
-copy .env.example .env    # Windows
-# cp .env.example .env    # macOS/Linux
+# Windows
+copy .env.example .env
+
+# macOS/Linux
+cp .env.example .env
 ```
 
-Edit `.env` dan masukkan token bot:
+Buka file `.env` dan masukkan token bot dari BotFather:
 ```env
 TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrSTUvwxYZ
 ```
 
 #### 5. (Opsional) Install FFmpeg
+FFmpeg diperlukan agar bot dapat membaca codec, bitrate per frame, dan framerate secara akurat:
 
-FFmpeg diperlukan untuk analisis kualitas video yang detail (codec, bitrate, fps).
+- **Windows (via winget):**
+  ```bash
+  winget install ffmpeg
+  ```
+- **macOS (via Homebrew):**
+  ```bash
+  brew install ffmpeg
+  ```
+- **Linux (Debian/Ubuntu):**
+  ```bash
+  sudo apt update && sudo apt install ffmpeg
+  ```
 
-**Windows:**
-```bash
-# Menggunakan winget
-winget install ffmpeg
-
-# Atau download dari https://ffmpeg.org/download.html
-# Tambahkan ke PATH
-```
-
-**macOS:**
-```bash
-brew install ffmpeg
-```
-
-**Linux:**
-```bash
-sudo apt install ffmpeg
-```
-
-#### 6. Jalankan bot
-
+#### 6. Jalankan Bot
 ```bash
 python bot.py
 ```
 
 ---
 
-## 📱 Cara Penggunaan
+## 📱 Alur Penggunaan
 
-1. **Buka Telegram** dan cari bot kamu
-2. **Kirim /start** untuk memulai
-3. **Salin link TikTok** dari aplikasi TikTok (Share → Copy Link)
-4. **Kirim link** ke chat bot
-5. **Tunggu beberapa detik** - analisis akan muncul otomatis!
-
-### Format link yang didukung:
-```
-https://www.tiktok.com/@username/video/1234567890
-https://vm.tiktok.com/XXXXXXX/
-https://vt.tiktok.com/XXXXXXX/
-```
+1. Buka bot di Telegram dan tekan `/start`.
+2. Kirimkan link video TikTok (mendukung format `tiktok.com/@user/video/...`, `vt.tiktok.com/...`, maupun `vm.tiktok.com/...`).
+3. Bot akan langsung menampilkan thumbnail video, statistik dasar, dan tombol aksi:
+   - **Tombol Download (576p, 720p, 1080p, Original HD)**: Langsung mengunduh video sesuai pilihan.
+   - **Tombol MP3**: Mengunduh audio dalam format MP3.
+   - **Tombol 🔍 Check**: Menganalisis kualitas penuh, menampilkan kartu visual HD, detail bitrate/codec, stream link lipat, dan VQ Score.
+   - **Tombol 🔄 Recheck**: Memeriksa ulang kualitas secara real-time.
 
 ---
 
-## 📊 VQ Score Guide
+## 📊 Panduan VQ Compression Score
 
-| Score | Grade | Keterangan |
-|-------|-------|------------|
-| 90-100 | 🟢 A+ | Excellent - Kualitas terbaik |
-| 80-89 | 🟢 A | Very Good - Sangat bagus |
-| 70-79 | 🟡 B | Good - Bagus |
-| 60-69 | 🟡 C | Fair - Cukup |
-| 50-59 | 🟠 D | Below Average - Di bawah rata-rata |
-| 40-49 | 🔴 E | Poor - Kurang |
-| 0-39 | 🔴 F | Very Poor - Sangat kurang |
+Skor VQ mengukur tingkat kompresi/distorsi video terhadap kualitas lossless master. **Skor lebih rendah menunjukkan kualitas yang lebih murni dan minim kompresi:**
 
-### Faktor VQ Score:
-- **Resolusi** (30%): Pixel count relatif terhadap 1080p
-- **Bitrate** (30%): Efisiensi bits-per-pixel
-- **Codec** (20%): AV1 > HEVC > H264
-- **Frame Rate** (20%): 60fps > 30fps > 24fps
+| Skor Kompresi | Grade | Keterangan Kualitas |
+|---|---|---|
+| **0 – 10** | 🟢 A+ | **No Compress** – Kualitas lossless / pristine |
+| **11 – 20** | 🟢 A | **Low Compression** – Sangat bagus |
+| **21 – 35** | 🟡 B | **Moderate** – Bagus & jernih |
+| **36 – 50** | 🟡 C | **Fair** – Kualitas standar/cukup |
+| **51 – 65** | 🟠 D | **Compressed** – Di bawah rata-rata |
+| **> 65** | 🔴 F | **Heavy Compression** – Kompresi berat |
+
+### Komponen Penilaian VQ:
+- **Resolusi**: Perbandingan pixel terhadap standar 1080p (1080×1920).
+- **Efisiensi Bitrate (BPP)**: Rasio bit-per-pixel terhadap frame rate.
+- **Modernitas Codec**: Bobot efisiensi `AV1` > `HEVC/H.265` > `H.264`.
+- **Frame Rate (FPS)**: Kelancaran video (60fps > 30fps > 24fps).
 
 ---
 
-## 🗂 Struktur Project
+## 🗂 Struktur File Project
 
 ```
-tiktok-analyzer-bot/
-├── bot.py              # Main entry point, Telegram bot
-├── tiktok_api.py       # TikTok data fetching (TikWM API)
-├── video_analyzer.py   # Video quality analysis (ffprobe)
-├── vq_score.py         # VQ Score calculation
-├── formatter.py        # Message formatting
-├── config.py           # Configuration & constants
-├── requirements.txt    # Python dependencies
-├── .env.example        # Environment template
-└── README.md           # Documentation (file ini)
+kaycee_checker_bot/
+├── bot.py              # Main entry point & handler interaksi bot Telegram
+├── tiktok_api.py       # Fetching data TikTok (TikWM API, yt-dlp & fallback scraper)
+├── video_analyzer.py   # Analisis teknis video (ffprobe, bitrate, codec, resolusi)
+├── vq_score.py         # Kalkulasi VQ Compression Score & grading sistem
+├── card_generator.py   # Pembuat kartu infografis visual hasil analisis (Pillow)
+├── formatter.py        # Pemformat pesan HTML, blockquote expandable & styling UI
+├── emoji_icons.py      # Modul Custom Telegram Premium Emojis & fallback icon
+├── fetch_emoji.py      # Helper discovery custom emoji Telegram
+├── config.py           # Konfigurasi, token, kategori hashtag & bendera negara
+├── requirements.txt    # Daftar dependensi Python
+├── setup.bat           # Script otomatisasi setup venv & requirements untuk Windows
+├── .env.example        # Template konfigurasi environment variable
+└── README.md           # Dokumentasi lengkap bot (file ini)
 ```
 
 ---
 
-## 🔧 Mendapatkan Token Bot dari BotFather
+## 🔧 Panduan Membuat Bot di BotFather
 
-1. Buka Telegram, cari **@BotFather**
-2. Kirim `/newbot`
-3. Masukkan nama bot (contoh: `TikTok Analyzer`)
-4. Masukkan username bot (contoh: `tiktok_analyzer_bot`)
-5. BotFather akan memberikan token, salin ke file `.env`
-
----
-
-## ⚠️ Catatan Penting
-
-- Bot menggunakan **TikWM API** (unofficial) untuk mengambil data TikTok
-- **FFmpeg/ffprobe** bersifat opsional tetapi sangat disarankan untuk analisis kualitas yang detail
-- Deteksi **shadow ban** menggunakan heuristic sederhana dan mungkin tidak 100% akurat
-- **Kategori** di-infer dari hashtag video, bukan dari kategori resmi TikTok
-- Rate limit mungkin berlaku - hindari spam request yang berlebihan
+1. Buka Telegram dan cari **@BotFather**.
+2. Kirim perintah `/newbot`.
+3. Masukkan nama tampilan bot (contoh: `TikTok Quality Checker`).
+4. Masukkan username unik yang berakhiran `bot` (contoh: `kaycee_checker_bot`).
+5. Salin token API yang diberikan ke dalam file `.env`.
 
 ---
 
-## 📝 License
+## 📝 Lisensi
 
-MIT License - Free to use and modify.
+Proyek ini dilisensikan di bawah lisensi [MIT](LICENSE) — Bebas digunakan dan dikembangkan.
