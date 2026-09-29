@@ -465,6 +465,77 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
 
 
+def build_video_filename(title: str = "", hashtags: list = None, max_length: int = 80, fallback_id: str = "") -> str:
+    """
+    Build a clean, filesystem-safe filename derived from video caption and hashtags.
+    Automatically limits length to avoid OS path errors while preserving key context & hashtags.
+    """
+    raw_title = (title or "").strip()
+    tags = [t.strip().lstrip('#') for t in (hashtags or []) if t and t.strip()]
+
+    # Append any hashtags from metadata that aren't already included in title
+    raw_lower = raw_title.lower()
+    missing_tags = [t for t in tags if f"#{t.lower()}" not in raw_lower]
+    if missing_tags:
+        extra_tags_str = " ".join([f"#{t}" for t in missing_tags])
+        full_text = f"{raw_title} {extra_tags_str}" if raw_title else extra_tags_str
+    else:
+        full_text = raw_title
+
+    if not full_text.strip():
+        base = f"TikTok_{fallback_id}" if fallback_id else "TikTok_Video"
+        return f"{base}.mp4"
+
+    # Replace newlines, carriage returns, tabs with spaces
+    cleaned = re.sub(r'[\r\n\t]+', ' ', full_text)
+    # Remove illegal filename characters across Windows/Linux/macOS/Android: \ / : * ? " < > |
+    cleaned = re.sub(r'[\\/:*?"<>|]', '', cleaned)
+    # Collapse multiple consecutive spaces
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+
+    # If within limit, return directly
+    if len(cleaned) <= max_length:
+        return f"{cleaned.rstrip(' .-_')}.mp4"
+
+    # If too long, smart truncate: preserve caption intro + key hashtags
+    found_tags = re.findall(r'#\w+', cleaned)
+    text_only = re.sub(r'#\w+', '', cleaned)
+    text_only = re.sub(r'\s+', ' ', text_only).strip()
+
+    if found_tags:
+        # Build hashtag budget (up to 35 chars)
+        tags_str = ""
+        for tag in found_tags:
+            candidate = f"{tags_str} {tag}".strip() if tags_str else tag
+            if len(candidate) <= 35:
+                tags_str = candidate
+            else:
+                break
+
+        # Remaining budget for caption text
+        available_text_len = max_length - len(tags_str) - 1
+        if available_text_len > 15 and text_only:
+            trunc_text = text_only[:available_text_len].rstrip()
+            if ' ' in trunc_text and len(trunc_text) > 15:
+                trunc_text = trunc_text.rsplit(' ', 1)[0]
+            trunc_text = trunc_text.rstrip(' .-_')
+            result = f"{trunc_text} {tags_str}" if trunc_text else tags_str
+        else:
+            result = tags_str if tags_str else cleaned[:max_length]
+    else:
+        # No hashtags, just truncate text at word boundary
+        trunc_text = cleaned[:max_length].rstrip()
+        if ' ' in trunc_text and len(trunc_text) > 20:
+            trunc_text = trunc_text.rsplit(' ', 1)[0]
+        result = trunc_text.rstrip(' .-_')
+
+    result = result.strip(' .-_')
+    if not result:
+        result = f"TikTok_{fallback_id}" if fallback_id else "TikTok_Video"
+
+    return f"{result}.mp4"
+
+
 async def _download_tiktok_video_bytes(orig_url: str, fallback_url: str = "", quality: str = "best") -> bytes | None:
     """
     High-fidelity direct raw master video downloader.
@@ -603,8 +674,14 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         raw_bytes = await _download_tiktok_video_bytes(orig_url, fallback_url=best_url, quality="best")
         if raw_bytes:
             try:
+                video_filename = build_video_filename(
+                    title=tiktok_data.get("title", ""),
+                    hashtags=tiktok_data.get("hashtags", []),
+                    max_length=80,
+                    fallback_id=f"{video_id}_{final_width}x{final_height}",
+                )
                 video_bytes = BytesIO(raw_bytes)
-                video_bytes.name = f"{video_id}_{final_width}x{final_height}.mp4"
+                video_bytes.name = video_filename
                 
                 await context.bot.send_video(
                     chat_id=chat_id,
@@ -615,6 +692,7 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     height=final_height if final_height > 0 else None,
                     supports_streaming=True,
                     reply_markup=checker_keyboard,
+                    filename=video_filename,
                 )
                 sent_video = True
             except Exception as vid_err:
@@ -812,9 +890,16 @@ async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             v_bytes = BytesIO(raw_bytes)
             send_success = False
 
+            video_filename = build_video_filename(
+                title=tiktok_data.get("title", ""),
+                hashtags=tiktok_data.get("hashtags", []),
+                max_length=80,
+                fallback_id=f"{label}_{video_id}",
+            )
+
             # Send as playable video in chat
             try:
-                v_bytes.name = f"TikTok_{label}_{video_id}.mp4"
+                v_bytes.name = video_filename
                 await context.bot.send_video(
                     chat_id=chat_id,
                     video=v_bytes,
@@ -823,17 +908,18 @@ async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                     width=w if w > 0 else None,
                     height=h if h > 0 else None,
                     supports_streaming=True,
+                    filename=video_filename,
                 )
                 send_success = True
             except Exception as vid_err:
                 logger.warning(f"send_video failed ({vid_err}), falling back to send_document (Raw File)...")
                 try:
                     v_bytes.seek(0)
-                    v_bytes.name = f"TikTok_{label}_{video_id}.mp4"
+                    v_bytes.name = video_filename
                     await context.bot.send_document(
                         chat_id=chat_id,
                         document=v_bytes,
-                        filename=f"TikTok_{label}_{video_id}.mp4",
+                        filename=video_filename,
                         caption=vid_caption,
                         parse_mode=ParseMode.HTML,
                     )
@@ -1007,13 +1093,20 @@ async def callback_preview(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     resp = await client.get(play_url, headers=headers)
                     if resp.status_code == 200 and len(resp.content) > 1000:
                         v_bytes = BytesIO(resp.content)
-                        v_bytes.name = f"preview_{video_id}.mp4"
+                        preview_filename = build_video_filename(
+                            title=f"preview {tiktok_data.get('title', '')}",
+                            hashtags=tiktok_data.get("hashtags", []),
+                            max_length=80,
+                            fallback_id=f"preview_{video_id}",
+                        )
+                        v_bytes.name = preview_filename
                         await context.bot.send_video(
                             chat_id=chat_id,
                             video=v_bytes,
                             caption=f"▷ <b>Video Preview</b>\n👤 @{html_module.escape(tiktok_data.get('author_username', ''))}",
                             parse_mode=ParseMode.HTML,
                             supports_streaming=True,
+                            filename=preview_filename,
                         )
                         sent = True
             except Exception as e:
