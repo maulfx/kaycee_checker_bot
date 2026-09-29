@@ -468,12 +468,40 @@ async def handle_tiktok_link(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def _download_tiktok_video_bytes(orig_url: str, fallback_url: str = "", quality: str = "best") -> bytes | None:
     """
     High-fidelity direct raw master video downloader.
-    Downloads uncompressed master streams directly from TikTok ByteDance servers (yt-dlp master feed & direct CDN)
+    Downloads uncompressed master streams directly from TikTok ByteDance servers (direct CDN & yt-dlp master feed)
     without using any third-party proxy fallback engines.
     """
     loop = asyncio.get_running_loop()
 
-    # 1. Primary Engine: yt-dlp (Extracts raw ByteDance master feed bit-for-bit without proxy compression)
+    # 1. Primary Engine: Direct TikTok CDN Origin Stream via curl_cffi
+    # When fallback_url is provided (extracted directly from TikTok bitrate_info master stream),
+    # download bit-for-bit directly from ByteDance CDN to preserve pure uncompressed master quality.
+    if fallback_url:
+        try:
+            def _direct_cdn_dl():
+                try:
+                    from curl_cffi import requests as curl_requests
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+                        "Referer": "https://www.tiktok.com/",
+                        "Accept": "*/*",
+                        "Range": "bytes=0-",
+                    }
+                    r = curl_requests.get(fallback_url, headers=headers, impersonate="safari17_0", timeout=40)
+                    if r.status_code in (200, 206) and len(r.content) > 5000:
+                        return r.content
+                except Exception as e:
+                    logger.debug(f"curl_cffi direct CDN error: {e}")
+                return None
+
+            cdn_res = await loop.run_in_executor(None, _direct_cdn_dl)
+            if cdn_res:
+                logger.info(f"Successfully downloaded direct CDN master stream ({len(cdn_res)} bytes)")
+                return cdn_res
+        except Exception as e:
+            logger.debug(f"Direct stream download error: {e}")
+
+    # 2. Secondary Engine: yt-dlp (Fallback with format sorting for maximum bitrate/resolution)
     if orig_url:
         try:
             import yt_dlp
@@ -483,17 +511,18 @@ async def _download_tiktok_video_bytes(orig_url: str, fallback_url: str = "", qu
             def _ytdlp_dl():
                 with tempfile.TemporaryDirectory() as tmpdir:
                     outpath = os.path.join(tmpdir, "vid.mp4")
-                    format_opt = "bestvideo+bestaudio/best"
+                    format_opt = "bv*+ba/b"
                     if quality == "720":
-                        format_opt = "bestvideo[height<=720]+bestaudio/best[height<=720]/best"
+                        format_opt = "bv*[height<=720]+ba/b[height<=720]/b"
                     elif quality in ("540", "480"):
-                        format_opt = "bestvideo[height<=576]+bestaudio/best[height<=576]/best"
+                        format_opt = "bv*[height<=576]+ba/b[height<=576]/b"
 
                     ydl_opts = {
                         "quiet": True,
                         "no_warnings": True,
                         "outtmpl": outpath,
                         "format": format_opt,
+                        "format_sort": ["res", "fps", "vbr", "tbr", "size"],
                         "socket_timeout": 30,
                         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
                     }
@@ -506,34 +535,10 @@ async def _download_tiktok_video_bytes(orig_url: str, fallback_url: str = "", qu
 
             res = await loop.run_in_executor(None, _ytdlp_dl)
             if res and len(res) > 5000:
+                logger.info(f"Successfully downloaded video via yt-dlp fallback ({len(res)} bytes)")
                 return res
         except Exception as e:
             logger.warning(f"yt-dlp raw master download error: {e}")
-
-    # 2. Secondary Engine: Direct TikTok CDN Origin Stream via curl_cffi / httpx
-    if fallback_url:
-        try:
-            def _direct_cdn_dl():
-                try:
-                    from curl_cffi import requests as curl_requests
-                    headers = {
-                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
-                        "Referer": "https://www.tiktok.com/",
-                        "Accept": "*/*",
-                        "Range": "bytes=0-",
-                    }
-                    r = curl_requests.get(fallback_url, headers=headers, impersonate="safari17_0", timeout=35)
-                    if r.status_code in (200, 206) and len(r.content) > 5000:
-                        return r.content
-                except Exception as e:
-                    logger.debug(f"curl_cffi direct CDN error: {e}")
-                return None
-
-            cdn_res = await loop.run_in_executor(None, _direct_cdn_dl)
-            if cdn_res:
-                return cdn_res
-        except Exception as e:
-            logger.debug(f"Direct stream download error: {e}")
 
     return None
 
@@ -804,8 +809,11 @@ async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
         raw_bytes = await _download_tiktok_video_bytes(orig_url, fallback_url=download_url, quality=quality)
         if raw_bytes:
+            v_bytes = BytesIO(raw_bytes)
+            send_success = False
+
+            # Send as playable video in chat
             try:
-                v_bytes = BytesIO(raw_bytes)
                 v_bytes.name = f"TikTok_{label}_{video_id}.mp4"
                 await context.bot.send_video(
                     chat_id=chat_id,
@@ -816,8 +824,24 @@ async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                     height=h if h > 0 else None,
                     supports_streaming=True,
                 )
-            except Exception as err:
-                logger.warning(f"Failed to send video bytes for download: {err}")
+                send_success = True
+            except Exception as vid_err:
+                logger.warning(f"send_video failed ({vid_err}), falling back to send_document (Raw File)...")
+                try:
+                    v_bytes.seek(0)
+                    v_bytes.name = f"TikTok_{label}_{video_id}.mp4"
+                    await context.bot.send_document(
+                        chat_id=chat_id,
+                        document=v_bytes,
+                        filename=f"TikTok_{label}_{video_id}.mp4",
+                        caption=vid_caption,
+                        parse_mode=ParseMode.HTML,
+                    )
+                    send_success = True
+                except Exception as doc_err:
+                    logger.warning(f"send_document fallback also failed: {doc_err}")
+
+            if not send_success:
                 await context.bot.send_message(
                     chat_id=chat_id,
                     text=f"❌ Failed to send {label} video file.",
