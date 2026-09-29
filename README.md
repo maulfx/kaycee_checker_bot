@@ -144,11 +144,8 @@ kaycee_checker_bot/
 ├── card_generator.py   # Pembuat kartu infografis visual hasil analisis (Pillow)
 ├── formatter.py        # Pemformat pesan HTML, blockquote expandable & styling UI
 ├── emoji_icons.py      # Modul Custom Telegram Premium Emojis & fallback icon
-├── fetch_emoji.py      # Helper discovery custom emoji Telegram
 ├── config.py           # Konfigurasi, token, kategori hashtag & bendera negara
 ├── requirements.txt    # Daftar dependensi Python
-├── setup.bat           # Script otomatisasi setup venv & requirements untuk Windows
-├── .env.example        # Template konfigurasi environment variable
 └── README.md           # Dokumentasi lengkap bot (file ini)
 ```
 

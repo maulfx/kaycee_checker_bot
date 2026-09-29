@@ -12,16 +12,8 @@ load_dotenv()
 # ─── Telegram Bot ─────────────────────────────────────────────
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 
-# ─── TikTok API ───────────────────────────────────────────────
-TIKWM_API_URL = "https://www.tikwm.com/api/"
-TIKWM_API_TIMEOUT = 30  # seconds
-
 # ─── FFprobe ──────────────────────────────────────────────────
 FFPROBE_PATH = os.getenv("FFPROBE_PATH", "ffprobe")
-
-# ─── Temp Directory ───────────────────────────────────────────
-TEMP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp")
-os.makedirs(TEMP_DIR, exist_ok=True)
 
 # ─── Region Flags ─────────────────────────────────────────────
 REGION_FLAGS = {
