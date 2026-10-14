@@ -254,7 +254,15 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
         top_stream = sorted_streams[0] if sorted_streams else {}
         top_w = top_stream.get("width", max_width or width)
         top_h = top_stream.get("height", max_height or height)
-        top_fps = top_stream.get("fps") or 0
+
+        # Check all parsed streams for any detected FPS
+        detected_stream_fps = 0
+        for s in sorted_streams:
+            s_fps = int(round(s.get("fps") or 0))
+            if s_fps > detected_stream_fps:
+                detected_stream_fps = s_fps
+
+        top_fps = top_stream.get("fps") or detected_stream_fps or 0
 
         # Dynamic FPS based on actual stream (preserves 20, 24, 25, 30, 50, 60, etc.)
         phone_fps = int(round(top_fps)) if top_fps > 0 else 30
@@ -310,6 +318,7 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
             "origin_cover_url": video.get("originCover", ""),
             "width": max_width or width,
             "height": max_height or height,
+            "fps": phone_fps,
             "size": 0,
             "hd_size": 0,
             "wm_size": 0,

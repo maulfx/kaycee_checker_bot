@@ -660,6 +660,13 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         stream_fps = (best_stream.get("fps", 0) if best_stream else 0) or tiktok_data.get("fps", 0)
         final_fps = probed_fps if probed_fps > 0 else (stream_fps if stream_fps > 0 else 30)
 
+        # Synchronize resolved FPS across dictionaries and streams
+        tiktok_data["fps"] = final_fps
+        video_quality["fps"] = final_fps
+        for s in tiktok_data.get("bitrate_info", []):
+            if not s.get("fps") or s.get("fps") <= 0:
+                s["fps"] = final_fps
+
         vq = calculate_vq_score(
             width=final_width,
             height=final_height,
@@ -764,6 +771,13 @@ async def callback_recheck(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         probed_fps = video_quality.get("fps", 0)
         stream_fps = (bitrate_info[0].get("fps", 0) if bitrate_info else 0) or tiktok_data.get("fps", 0)
         final_fps = probed_fps if probed_fps > 0 else (stream_fps if stream_fps > 0 else 30)
+
+        # Synchronize resolved FPS across dictionaries and streams
+        tiktok_data["fps"] = final_fps
+        video_quality["fps"] = final_fps
+        for s in tiktok_data.get("bitrate_info", []):
+            if not s.get("fps") or s.get("fps") <= 0:
+                s["fps"] = final_fps
 
         vq = calculate_vq_score(
             width=final_width,

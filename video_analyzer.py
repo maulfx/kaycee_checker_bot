@@ -148,6 +148,14 @@ async def analyze_video(video_url: str, fallback_data: dict = None) -> dict:
     cd = fallback_data.get("codec", "h264")
     orig_url = fallback_data.get("original_url") or fallback_data.get("url") or video_url
     
+    fb_fps = int(round(fallback_data.get("fps", 0) or 0))
+    if not fb_fps and fallback_data.get("bitrate_info"):
+        for s in fallback_data["bitrate_info"]:
+            s_fps = int(round(s.get("fps") or 0))
+            if s_fps > fb_fps:
+                fb_fps = s_fps
+    init_fps = fb_fps if fb_fps > 0 else 30
+
     result = {
         "width": w,
         "height": h,
@@ -155,7 +163,7 @@ async def analyze_video(video_url: str, fallback_data: dict = None) -> dict:
         "codec_long": cd,
         "profile": "",
         "bitrate_kbps": br,
-        "fps": fallback_data.get("fps", 30),
+        "fps": init_fps,
         "duration": fallback_data.get("duration", 0),
         "file_size_bytes": fallback_data.get("size", 0),
         "audio_codec": "",
@@ -166,8 +174,8 @@ async def analyze_video(video_url: str, fallback_data: dict = None) -> dict:
         "ytdlp_available": False,
         "streams": fallback_data.get("bitrate_info", []),
         # Quality tiers
-        "browser_quality": fallback_data.get("browser_quality") or _calculate_quality_tier(w, h, fallback_data.get("fps", 30), "browser"),
-        "phone_quality": fallback_data.get("phone_quality") or _calculate_quality_tier(w, h, fallback_data.get("fps", 30), "phone"),
+        "browser_quality": fallback_data.get("browser_quality") or _calculate_quality_tier(w, h, init_fps, "browser"),
+        "phone_quality": fallback_data.get("phone_quality") or _calculate_quality_tier(w, h, init_fps, "phone"),
     }
     
     # ─── 1. Primary Method: yt-dlp Deep Format Extractor ───
@@ -286,11 +294,20 @@ async def analyze_video(video_url: str, fallback_data: dict = None) -> dict:
     result["browser_quality"] = _calculate_quality_tier(result["width"], result["height"], result["fps"], "browser")
     result["phone_quality"] = _calculate_quality_tier(result["width"], result["height"], result["fps"], "phone")
     
-    # Propagate probed FPS to any stream that had missing or zero fps
-    if result.get("fps") and result.get("streams"):
-        for s in result["streams"]:
-            if not s.get("fps") or s.get("fps") <= 0:
-                s["fps"] = result["fps"]
+    # Propagate probed FPS to any stream that had missing or zero fps and sync back to fallback_data
+    if result.get("fps"):
+        if result.get("streams"):
+            for s in result["streams"]:
+                if not s.get("fps") or s.get("fps") <= 0:
+                    s["fps"] = result["fps"]
+        if fallback_data and fallback_data.get("bitrate_info"):
+            for s in fallback_data["bitrate_info"]:
+                if not s.get("fps") or s.get("fps") <= 0:
+                    s["fps"] = result["fps"]
+        if fallback_data is not None:
+            fallback_data["fps"] = result["fps"]
+            fallback_data["browser_quality"] = result["browser_quality"]
+            fallback_data["phone_quality"] = result["phone_quality"]
 
     return result
 
