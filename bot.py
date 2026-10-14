@@ -656,7 +656,9 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         final_height = (best_stream.get("height") if best_stream else 0) or video_quality.get("height") or tiktok_data.get("height", 0)
         final_bitrate = (best_stream.get("bitrate", 0) // 1000 if best_stream else 0) or video_quality.get("bitrate_kbps") or tiktok_data.get("bitrate_kbps", 0)
         final_codec = (best_stream.get("codec") if best_stream else "") or video_quality.get("codec") or tiktok_data.get("codec", "h264")
-        final_fps = (best_stream.get("fps") if best_stream else 0) or video_quality.get("fps", 30)
+        probed_fps = video_quality.get("fps", 0)
+        stream_fps = (best_stream.get("fps", 0) if best_stream else 0) or tiktok_data.get("fps", 0)
+        final_fps = probed_fps if probed_fps > 0 else (stream_fps if stream_fps > 0 else 30)
 
         vq = calculate_vq_score(
             width=final_width,
@@ -759,7 +761,9 @@ async def callback_recheck(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         final_height = (bitrate_info[0].get("height") if bitrate_info else 0) or video_quality.get("height") or tiktok_data.get("height", 0)
         final_bitrate = (bitrate_info[0].get("bitrate", 0) // 1000 if bitrate_info else 0) or video_quality.get("bitrate_kbps") or tiktok_data.get("bitrate_kbps", 0)
         final_codec = (bitrate_info[0].get("codec") if bitrate_info else "") or video_quality.get("codec") or tiktok_data.get("codec", "h264")
-        final_fps = (bitrate_info[0].get("fps") if bitrate_info else 0) or video_quality.get("fps", 30)
+        probed_fps = video_quality.get("fps", 0)
+        stream_fps = (bitrate_info[0].get("fps", 0) if bitrate_info else 0) or tiktok_data.get("fps", 0)
+        final_fps = probed_fps if probed_fps > 0 else (stream_fps if stream_fps > 0 else 30)
 
         vq = calculate_vq_score(
             width=final_width,

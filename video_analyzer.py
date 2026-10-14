@@ -127,7 +127,7 @@ async def extract_all_qualities_ytdlp(url: str) -> dict:
         "file_size_bytes": best_size,
         "play_url": best_stream.get("url") or info.get("url", ""),
         "streams": parsed_streams,
-        "browser_quality": _calculate_quality_tier(best_w, best_h, 30, "browser"),
+        "browser_quality": _calculate_quality_tier(best_w, best_h, best_fps, "browser"),
         "phone_quality": _calculate_quality_tier(best_w, best_h, best_fps, "phone"),
         "ytdlp_available": True,
     }
@@ -166,8 +166,8 @@ async def analyze_video(video_url: str, fallback_data: dict = None) -> dict:
         "ytdlp_available": False,
         "streams": fallback_data.get("bitrate_info", []),
         # Quality tiers
-        "browser_quality": fallback_data.get("browser_quality") or _calculate_quality_tier(w, h, 30, "browser"),
-        "phone_quality": fallback_data.get("phone_quality") or _calculate_quality_tier(w, h, 30, "phone"),
+        "browser_quality": fallback_data.get("browser_quality") or _calculate_quality_tier(w, h, fallback_data.get("fps", 30), "browser"),
+        "phone_quality": fallback_data.get("phone_quality") or _calculate_quality_tier(w, h, fallback_data.get("fps", 30), "phone"),
     }
     
     # ─── 1. Primary Method: yt-dlp Deep Format Extractor ───
@@ -245,14 +245,19 @@ async def analyze_video(video_url: str, fallback_data: dict = None) -> dict:
                         result["codec_long"] = video_stream.get("codec_long_name", result["codec"])
                     result["profile"] = video_stream.get("profile", "")
                     
-                    fps_str = video_stream.get("r_frame_rate", "30/1")
-                    try:
-                        num, den = fps_str.split("/")
-                        parsed_fps = round(int(num) / int(den))
-                        if parsed_fps > 0:
-                            result["fps"] = parsed_fps
-                    except (ValueError, ZeroDivisionError):
-                        pass
+                    for rate_key in ("avg_frame_rate", "r_frame_rate"):
+                        fps_str = video_stream.get(rate_key, "")
+                        if fps_str and "/" in fps_str:
+                            try:
+                                num, den = fps_str.split("/")
+                                num, den = int(num), int(den)
+                                if den > 0 and num > 0:
+                                    calc_fps = round(num / den)
+                                    if 1 <= calc_fps <= 240:
+                                        result["fps"] = calc_fps
+                                        break
+                            except (ValueError, ZeroDivisionError):
+                                pass
                     
                     bitrate = video_stream.get("bit_rate")
                     if bitrate and int(bitrate) > 0:
@@ -277,10 +282,16 @@ async def analyze_video(video_url: str, fallback_data: dict = None) -> dict:
         except Exception as e:
             logger.warning(f"ffprobe execution warning: {e}")
 
-    # Re-calculate quality tiers with the most accurate resolution and FPS if not already resolved
-    result["browser_quality"] = fallback_data.get("browser_quality") or _calculate_quality_tier(result["width"], result["height"], 30, "browser")
-    result["phone_quality"] = fallback_data.get("phone_quality") or _calculate_quality_tier(result["width"], result["height"], result["fps"], "phone")
+    # Re-calculate quality tiers with the most accurate resolution and FPS
+    result["browser_quality"] = _calculate_quality_tier(result["width"], result["height"], result["fps"], "browser")
+    result["phone_quality"] = _calculate_quality_tier(result["width"], result["height"], result["fps"], "phone")
     
+    # Propagate probed FPS to any stream that had missing or zero fps
+    if result.get("fps") and result.get("streams"):
+        for s in result["streams"]:
+            if not s.get("fps") or s.get("fps") <= 0:
+                s["fps"] = result["fps"]
+
     return result
 
 
@@ -305,7 +316,7 @@ def _calculate_quality_tier(width: int, height: int, fps: int = 30, device: str 
     else:
         res = f"{base_dim}p" if base_dim > 0 else "Unknown"
     
-    display_fps = 60 if fps >= 50 else 30
+    display_fps = int(round(fps)) if (fps and fps > 0) else 30
     return f"{res}{display_fps}" if res != "Unknown" else "Unknown"
 
 

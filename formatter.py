@@ -110,7 +110,7 @@ def _get_stream_resolution_label(w: int, h: int, fps: int, gear: str = "") -> st
     else:
         res = f"{base_dim}p" if base_dim > 0 else "720p"
     
-    stream_fps = fps if fps > 0 else 30
+    stream_fps = int(round(fps)) if (fps and fps > 0) else 30
     return f"{res}{stream_fps}"
 
 
@@ -172,10 +172,18 @@ def format_analysis_message(
     orig_height = tiktok_data.get("height", 0) or video_quality.get("height", 0)
     codec = video_quality.get("codec") or tiktok_data.get("codec", "h264")
     bitrate_kbps = video_quality.get("bitrate_kbps") or tiktok_data.get("bitrate_kbps", 0)
-    fps = video_quality.get("fps", 30)
+    probed_fps = video_quality.get("fps", 0)
+    final_fps = probed_fps if probed_fps > 0 else (tiktok_data.get("fps") or 30)
+    fps = final_fps
     file_size = video_quality.get("file_size_bytes") or tiktok_data.get("size", 0)
-    browser_q = tiktok_data.get("browser_quality") or video_quality.get("browser_quality", "1080p60")
-    phone_q = tiktok_data.get("phone_quality") or video_quality.get("phone_quality", "1080p60")
+    
+    # Use probed quality tier if available, otherwise fallback to tiktok_data tier
+    if probed_fps > 0:
+        browser_q = video_quality.get("browser_quality") or _get_stream_resolution_label(orig_width, orig_height, probed_fps)
+        phone_q = video_quality.get("phone_quality") or _get_stream_resolution_label(orig_width, orig_height, probed_fps)
+    else:
+        browser_q = tiktok_data.get("browser_quality") or video_quality.get("browser_quality", f"{max(orig_width, orig_height)}p30")
+        phone_q = tiktok_data.get("phone_quality") or video_quality.get("phone_quality", f"{max(orig_width, orig_height)}p30")
     
     bitrate_info = tiktok_data.get("bitrate_info", [])
     
@@ -238,6 +246,7 @@ def format_analysis_message(
     # Expandable Stream Profiles blockquote (padded with invisible space for 100% full-width bubble match)
     FULL_WIDTH_PAD = "\u2800" * 28
     quote_lines = []
+    seen_streams = set()
     if bitrate_info:
         for idx, b in enumerate(bitrate_info):
             gear = b.get("gear", "play_addr")
@@ -245,9 +254,22 @@ def format_analysis_message(
             b_bitrate = b.get("bitrate", 0)
             b_w = b.get("width", 0)
             b_h = b.get("height", 0)
-            b_fps = b.get("fps", 60)
-            b_data_size = float(b.get("data_size", 0) or 0)
             
+            # If real streams are present, skip redundant fallback play_addr
+            if gear == "play_addr" and len(bitrate_info) > 1:
+                continue
+
+            # Stream FPS fallback hierarchy: stream fps -> probed video fps -> 30
+            stream_fps_val = b.get("fps") or 0
+            b_fps = int(round(stream_fps_val)) if stream_fps_val > 0 else final_fps
+
+            # Deduplicate streams: skip duplicate gear with same res and codec
+            stream_key = (b_w, b_h, b_codec, gear)
+            if stream_key in seen_streams:
+                continue
+            seen_streams.add(stream_key)
+
+            b_data_size = float(b.get("data_size", 0) or 0)
             if b_data_size <= 0 and duration > 0 and b_bitrate > 0:
                 b_size_bytes = (b_bitrate / 8.0) * duration
             else:
@@ -258,12 +280,12 @@ def format_analysis_message(
             res_str = _get_stream_resolution_label(b_w, b_h, b_fps, gear)
 
             dev_icon = _get_gear_device_icon(gear)
-            pad_str = FULL_WIDTH_PAD if idx == 0 else ""
+            pad_str = FULL_WIDTH_PAD if len(quote_lines) == 0 else ""
             quote_lines.append(f"{dev_icon} <b>{gear}</b>{pad_str}")
             quote_lines.append(f"<code>{res_str}</code> • <code>{bitrate_str}</code> • <code>{b_codec}</code> • <code>{size_str}</code>")
     else:
         max_d = max(orig_width, orig_height)
-        res_str = f"{max_d}p60" if max_d > 0 else "1080p60"
+        res_str = f"{max_d}p{final_fps}" if max_d > 0 else f"1080p{final_fps}"
         bitrate_str = _format_bitrate_str(bitrate_kbps * 1000) if bitrate_kbps > 0 else "2.0 MBps"
         size_bytes = (bitrate_kbps * 1000 / 8.0) * duration if (duration > 0 and bitrate_kbps > 0) else file_size
         size_str = _format_file_size_str(size_bytes) if size_bytes > 0 else "4.5 MB"

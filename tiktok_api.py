@@ -80,7 +80,7 @@ def _calculate_quality_tier_string(width: int, height: int, fps: int = 30, devic
     else:
         res = f"{base_dim}p" if base_dim > 0 else "720p"
 
-    display_fps = 60 if fps >= 50 else 30
+    display_fps = int(round(fps)) if (fps and fps > 0) else 30
     return f"{res}{display_fps}"
 
 
@@ -150,27 +150,24 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
         hdplay_url = ""
         seen_gears = set()
 
-        # Add play_addr / play_addr_h264 stream if play_url exists
-        if play_url:
-            parsed_bitrate_info.append({
-                "gear": "play_addr",
-                "codec": _clean_codec(codec or "h264"),
-                "bitrate": bitrate,
-                "width": width,
-                "height": height,
-                "fps": 30,
-                "data_size": int((bitrate / 8.0) * duration) if (bitrate > 0 and duration > 0) else 0,
-                "url": play_url
-            })
-            seen_gears.add("play_addr")
-
+        # Parse real streams directly from raw_bitrate_info
         for b in raw_bitrate_info:
             w = int(b.get("PlayAddr", {}).get("Width", 0) or 0)
             h = int(b.get("PlayAddr", {}).get("Height", 0) or 0)
             br = int(b.get("Bitrate", 0) or 0)
             cd = b.get("CodecType", "")
             gear = b.get("GearName", "")
-            b_fps = int(b.get("BitrateFPS", 30) or 30)
+            
+            # Detect FPS from gear name (e.g. normal_720_60, 720p60, gear_60, 60fps)
+            # Must NOT match the '20' inside '720' or numbers inside resolutions
+            gear_lower = gear.lower()
+            detected_fps = 0
+            fps_match = re.search(r'(?<!\d)(120|60|50|48|30|25|24|20)(?:fps)?(?!\d)', gear_lower)
+            if fps_match:
+                detected_fps = int(fps_match.group(1))
+
+            raw_fps = b.get("BitrateFPS") or b.get("fps") or detected_fps or 0
+            b_fps = int(round(raw_fps)) if raw_fps else 0
             b_data_size = int(b.get("PlayAddr", {}).get("DataSize", 0) or 0)
             url_list = b.get("PlayAddr", {}).get("UrlList", [])
             b_url = url_list[0] if url_list else ""
@@ -197,45 +194,20 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
                 if b_url:
                     hdplay_url = b_url
 
-        # Add mobile-specific transcode ladder fallback streams if 540p stream is present
-        has_540 = any("540" in g for g in seen_gears)
-        adapt_540_url = next((b["url"] for b in parsed_bitrate_info if "540" in b["gear"] and b["url"]), play_url)
-        if has_540 and not any("lower_540_1" in g for g in seen_gears):
-            # 576p30 lower_540_1
+        # ONLY add play_addr fallback IF raw_bitrate_info was completely empty!
+        # Do not inject fake duplicate play_addr when raw_bitrate_info already has real streams.
+        if play_url and not parsed_bitrate_info:
             parsed_bitrate_info.append({
-                "gear": "lower_540_1",
-                "codec": "hevc",
-                "bitrate": 451000,
-                "width": 626 if width > height else 576,
-                "height": 576 if width > height else 640,
-                "fps": 30,
-                "data_size": int((451000 / 8.0) * duration) if duration > 0 else 918500,
-                "url": adapt_540_url
+                "gear": "play_addr",
+                "codec": _clean_codec(codec or "h264"),
+                "bitrate": bitrate,
+                "width": width,
+                "height": height,
+                "fps": 0,
+                "data_size": int((bitrate / 8.0) * duration) if (bitrate > 0 and duration > 0) else 0,
+                "url": play_url
             })
-        if has_540 and not any("lowest_540_1" in g for g in seen_gears):
-            # 576p30 lowest_540_1
-            parsed_bitrate_info.append({
-                "gear": "lowest_540_1",
-                "codec": "hevc",
-                "bitrate": 295000,
-                "width": 626 if width > height else 576,
-                "height": 576 if width > height else 640,
-                "fps": 30,
-                "data_size": int((295000 / 8.0) * duration) if duration > 0 else 600400,
-                "url": adapt_540_url
-            })
-        if has_540 and not any("lowest_480_1" in g for g in seen_gears):
-            # 480p30 lowest_480_1
-            parsed_bitrate_info.append({
-                "gear": "lowest_480_1",
-                "codec": "hevc",
-                "bitrate": 248000,
-                "width": 522 if width > height else 480,
-                "height": 480 if width > height else 534,
-                "fps": 30,
-                "data_size": int((248000 / 8.0) * duration) if duration > 0 else 505900,
-                "url": adapt_540_url
-            })
+            seen_gears.add("play_addr")
 
         # Sort streams descending by resolution (width * height), then fps, then bitrate
         sorted_streams = sorted(
@@ -282,10 +254,10 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
         top_stream = sorted_streams[0] if sorted_streams else {}
         top_w = top_stream.get("width", max_width or width)
         top_h = top_stream.get("height", max_height or height)
-        top_fps = top_stream.get("fps", 30)
+        top_fps = top_stream.get("fps") or 0
 
-        # Phone quality tier based on top available stream
-        phone_fps = 60 if top_fps >= 50 else 30
+        # Dynamic FPS based on actual stream (preserves 20, 24, 25, 30, 50, 60, etc.)
+        phone_fps = int(round(top_fps)) if top_fps > 0 else 30
         phone_q = _calculate_quality_tier_string(top_w, top_h, phone_fps, "phone")
 
         # Browser quality tier: check web definition / ratio / base web width & height
@@ -441,7 +413,7 @@ def _extract_tiktok_ytdlp_sync(url: str) -> dict | None:
             play_url = best_stream.get("url") or info.get("url", "")
             hdplay_url = play_url
             
-            browser_q = _calculate_quality_tier_string(width, height, 30, "browser")
+            browser_q = _calculate_quality_tier_string(width, height, fps, "browser")
             phone_q = _calculate_quality_tier_string(width, height, fps, "phone")
             
             logger.info("Fetched TikTok video data via yt-dlp Engine")
