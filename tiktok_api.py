@@ -172,6 +172,10 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
             url_list = b.get("PlayAddr", {}).get("UrlList", [])
             b_url = url_list[0] if url_list else ""
 
+            # Filter out ghost streams with no valid URL or zero dimensions
+            if not b_url or (w <= 0 and h <= 0):
+                continue
+
             seen_gears.add(gear)
             parsed_bitrate_info.append({
                 "gear": gear,

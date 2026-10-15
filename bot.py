@@ -142,15 +142,18 @@ def _build_action_keyboard(data: dict, video_id: str) -> InlineKeyboardMarkup:
     stream_1080 = None
 
     for stream in bitrate_info:
-        max_dim = max(stream.get("width", 0), stream.get("height", 0))
+        w_s = int(stream.get("width", 0) or 0)
+        h_s = int(stream.get("height", 0) or 0)
+        base_dim = min(w_s, h_s) if (w_s > 0 and h_s > 0) else max(w_s, h_s)
         gear = stream.get("gear", "").lower()
-        if max_dim >= 1080 or "1080" in gear:
+
+        if base_dim >= 1080 or "1080" in gear:
             if stream_1080 is None:
                 stream_1080 = stream
-        elif (720 <= max_dim < 1080) or "720" in gear:
+        elif (720 <= base_dim < 1080 or "720" in gear) and "1080" not in gear:
             if stream_720 is None:
                 stream_720 = stream
-        elif (480 <= max_dim < 720) or "540" in gear or "576" in gear or "480" in gear or "lower" in gear or "lowest" in gear:
+        elif (base_dim < 720 or any(k in gear for k in ("540", "576", "480", "lower", "lowest"))) and "720" not in gear and "1080" not in gear:
             if stream_540 is None:
                 stream_540 = stream
 
@@ -188,21 +191,21 @@ def _build_action_keyboard(data: dict, video_id: str) -> InlineKeyboardMarkup:
     if not row1:
         w = data.get("width", 0)
         h = data.get("height", 0)
-        max_dim = max(w, h)
+        base_dim = min(w, h) if (w > 0 and h > 0) else max(w, h)
         size_val = data.get("hd_size") or data.get("size") or 0
         dummy_stream = {"data_size": size_val}
-        if max_dim >= 1080:
+        if base_dim >= 1080:
             row1.append(InlineKeyboardButton(
                 _stream_label("1080p", dummy_stream),
                 callback_data=f"dl_1080_{video_id}"
             ))
-        elif max_dim >= 720:
+        elif base_dim >= 720:
             row1.append(InlineKeyboardButton(
                 _stream_label("720p", dummy_stream),
                 callback_data=f"dl_720_{video_id}"
             ))
         else:
-            tag = f"{max_dim}p" if max_dim > 0 else "576p"
+            tag = f"{base_dim}p" if base_dim in (540, 576, 480, 360) else "576p"
             row1.append(InlineKeyboardButton(
                 _stream_label(tag, dummy_stream),
                 callback_data=f"dl_540_{video_id}"
@@ -879,17 +882,23 @@ async def callback_download(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         else:
             target_res = int(quality)
             for stream in bitrate_info:
-                max_dim = max(stream.get("width", 0), stream.get("height", 0))
-                gear = stream.get("gear", "")
-                if target_res >= 1080 and (max_dim >= 1080 or "1080" in gear):
-                    target_stream = stream
-                    break
-                elif target_res >= 720 and (max_dim >= 720 or "720" in gear) and max_dim < 1080 and "1080" not in gear:
-                    target_stream = stream
-                    break
-                elif target_res >= 480 and (max_dim >= 480 or "540" in gear) and max_dim < 720 and "720" not in gear:
-                    target_stream = stream
-                    break
+                w_s = int(stream.get("width", 0) or 0)
+                h_s = int(stream.get("height", 0) or 0)
+                base_dim = min(w_s, h_s) if (w_s > 0 and h_s > 0) else max(w_s, h_s)
+                gear = stream.get("gear", "").lower()
+
+                if target_res >= 1080:
+                    if base_dim >= 1080 or "1080" in gear:
+                        target_stream = stream
+                        break
+                elif target_res >= 720:
+                    if (720 <= base_dim < 1080 or "720" in gear) and "1080" not in gear:
+                        target_stream = stream
+                        break
+                elif target_res >= 480:
+                    if (base_dim < 720 or any(k in gear for k in ("540", "576", "480", "lower", "lowest"))) and "720" not in gear and "1080" not in gear:
+                        target_stream = stream
+                        break
 
             if target_stream and target_stream.get("url"):
                 download_url = target_stream["url"]
