@@ -658,7 +658,15 @@ async def callback_check(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         final_codec = (best_stream.get("codec") if best_stream else "") or video_quality.get("codec") or tiktok_data.get("codec", "h264")
         probed_fps = video_quality.get("fps", 0)
         stream_fps = (best_stream.get("fps", 0) if best_stream else 0) or tiktok_data.get("fps", 0)
-        final_fps = probed_fps if probed_fps > 0 else (stream_fps if stream_fps > 0 else 30)
+        top_stream_fps = 0
+        for s in tiktok_data.get("bitrate_info", []):
+            s_fps = int(round(s.get("fps") or 0))
+            if s_fps > top_stream_fps:
+                top_stream_fps = s_fps
+
+        final_fps = max(probed_fps, stream_fps, top_stream_fps, tiktok_data.get("fps", 0))
+        if final_fps <= 0:
+            final_fps = 30
 
         # Synchronize resolved FPS across dictionaries and streams
         tiktok_data["fps"] = final_fps
@@ -770,7 +778,15 @@ async def callback_recheck(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         final_codec = (bitrate_info[0].get("codec") if bitrate_info else "") or video_quality.get("codec") or tiktok_data.get("codec", "h264")
         probed_fps = video_quality.get("fps", 0)
         stream_fps = (bitrate_info[0].get("fps", 0) if bitrate_info else 0) or tiktok_data.get("fps", 0)
-        final_fps = probed_fps if probed_fps > 0 else (stream_fps if stream_fps > 0 else 30)
+        top_stream_fps = 0
+        for s in tiktok_data.get("bitrate_info", []):
+            s_fps = int(round(s.get("fps") or 0))
+            if s_fps > top_stream_fps:
+                top_stream_fps = s_fps
+
+        final_fps = max(probed_fps, stream_fps, top_stream_fps, tiktok_data.get("fps", 0))
+        if final_fps <= 0:
+            final_fps = 30
 
         # Synchronize resolved FPS across dictionaries and streams
         tiktok_data["fps"] = final_fps

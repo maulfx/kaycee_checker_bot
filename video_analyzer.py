@@ -69,7 +69,7 @@ async def extract_all_qualities_ytdlp(url: str) -> dict:
             
         w = int(f.get("width") or 0)
         h = int(f.get("height") or 0)
-        fps = int(round(f.get("fps") or 30))
+        fps = int(round(f.get("fps") or 0))
         tbr = f.get("tbr") or f.get("vbr") or 0
         bitrate_kbps = int(tbr) if tbr > 0 else 0
         bitrate_bps = bitrate_kbps * 1000
@@ -80,7 +80,7 @@ async def extract_all_qualities_ytdlp(url: str) -> dict:
         cleaned_codec = _clean_codec(vcodec)
         
         max_d = max(w, h)
-        res_label = f"{max_d}p{fps}" if max_d > 0 else "Unknown"
+        res_label = f"{max_d}p{fps}" if max_d > 0 and fps > 0 else (f"{max_d}p" if max_d > 0 else "Unknown")
 
         gear_name = format_id or format_note or f"{max_d}p"
 
@@ -111,7 +111,7 @@ async def extract_all_qualities_ytdlp(url: str) -> dict:
     best_stream = parsed_streams[0] if parsed_streams else {}
     best_w = best_stream.get("width") or int(info.get("width") or 0)
     best_h = best_stream.get("height") or int(info.get("height") or 0)
-    best_fps = best_stream.get("fps") or int(round(info.get("fps") or 30))
+    best_fps = best_stream.get("fps") or int(round(info.get("fps") or 0))
     best_bitrate = best_stream.get("bitrate_kbps") or int(info.get("tbr") or info.get("vbr") or 0)
     best_codec = best_stream.get("codec") or _clean_codec(info.get("vcodec", "h264"))
     best_size = best_stream.get("data_size") or int(info.get("filesize") or info.get("filesize_approx") or 0)
@@ -127,8 +127,8 @@ async def extract_all_qualities_ytdlp(url: str) -> dict:
         "file_size_bytes": best_size,
         "play_url": best_stream.get("url") or info.get("url", ""),
         "streams": parsed_streams,
-        "browser_quality": _calculate_quality_tier(best_w, best_h, best_fps, "browser"),
-        "phone_quality": _calculate_quality_tier(best_w, best_h, best_fps, "phone"),
+        "browser_quality": _calculate_quality_tier(best_w, best_h, best_fps or 30, "browser"),
+        "phone_quality": _calculate_quality_tier(best_w, best_h, best_fps or 30, "phone"),
         "ytdlp_available": True,
     }
 
@@ -188,8 +188,9 @@ async def analyze_video(video_url: str, fallback_data: dict = None) -> dict:
                     result["width"] = ytdlp_res["width"]
                 if ytdlp_res.get("height"):
                     result["height"] = ytdlp_res["height"]
-                if ytdlp_res.get("fps"):
-                    result["fps"] = ytdlp_res["fps"]
+                if ytdlp_res.get("fps") and ytdlp_res["fps"] > 0:
+                    if ytdlp_res["fps"] > result.get("fps", 0) or result.get("fps", 0) <= 0:
+                        result["fps"] = ytdlp_res["fps"]
                 if ytdlp_res.get("bitrate_kbps"):
                     result["bitrate_kbps"] = ytdlp_res["bitrate_kbps"]
                 if ytdlp_res.get("codec"):
@@ -201,8 +202,10 @@ async def analyze_video(video_url: str, fallback_data: dict = None) -> dict:
                     result["duration"] = ytdlp_res["duration"]
                 
                 result["streams"] = ytdlp_res["streams"]
-                result["browser_quality"] = ytdlp_res["browser_quality"]
-                result["phone_quality"] = ytdlp_res["phone_quality"]
+                if ytdlp_res.get("browser_quality"):
+                    result["browser_quality"] = ytdlp_res["browser_quality"]
+                if ytdlp_res.get("phone_quality"):
+                    result["phone_quality"] = ytdlp_res["phone_quality"]
                 logger.info(f"yt-dlp extracted {len(ytdlp_res['streams'])} quality streams successfully")
         except Exception as e:
             logger.warning(f"yt-dlp analysis encountered an error: {e}")
@@ -291,8 +294,12 @@ async def analyze_video(video_url: str, fallback_data: dict = None) -> dict:
             logger.warning(f"ffprobe execution warning: {e}")
 
     # Re-calculate quality tiers with the most accurate resolution and FPS
-    result["browser_quality"] = _calculate_quality_tier(result["width"], result["height"], result["fps"], "browser")
-    result["phone_quality"] = _calculate_quality_tier(result["width"], result["height"], result["fps"], "phone")
+    effective_fps = max(result.get("fps", 0), init_fps)
+    result["fps"] = effective_fps if effective_fps > 0 else 30
+    
+    # Preserve fallback quality tiers if they were device-specific
+    result["browser_quality"] = fallback_data.get("browser_quality") or _calculate_quality_tier(result["width"], result["height"], result["fps"], "browser")
+    result["phone_quality"] = fallback_data.get("phone_quality") or _calculate_quality_tier(result["width"], result["height"], result["fps"], "phone")
     
     # Propagate probed FPS to any stream that had missing or zero fps and sync back to fallback_data
     if result.get("fps"):
@@ -305,9 +312,12 @@ async def analyze_video(video_url: str, fallback_data: dict = None) -> dict:
                 if not s.get("fps") or s.get("fps") <= 0:
                     s["fps"] = result["fps"]
         if fallback_data is not None:
-            fallback_data["fps"] = result["fps"]
-            fallback_data["browser_quality"] = result["browser_quality"]
-            fallback_data["phone_quality"] = result["phone_quality"]
+            if result["fps"] > fallback_data.get("fps", 0):
+                fallback_data["fps"] = result["fps"]
+            if not fallback_data.get("browser_quality"):
+                fallback_data["browser_quality"] = result["browser_quality"]
+            if not fallback_data.get("phone_quality"):
+                fallback_data["phone_quality"] = result["phone_quality"]
 
     return result
 

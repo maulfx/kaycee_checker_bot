@@ -251,10 +251,6 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
         vq_score = float(raw_vq) if raw_vq else 0.0
 
         # ─── Quality Tiers ───
-        top_stream = sorted_streams[0] if sorted_streams else {}
-        top_w = top_stream.get("width", max_width or width)
-        top_h = top_stream.get("height", max_height or height)
-
         # Check all parsed streams for any detected FPS
         detected_stream_fps = 0
         for s in sorted_streams:
@@ -262,24 +258,51 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
             if s_fps > detected_stream_fps:
                 detected_stream_fps = s_fps
 
-        top_fps = top_stream.get("fps") or detected_stream_fps or 0
+        # If 60fps (or higher) is detected on any stream, propagate to streams with 0 fps
+        if detected_stream_fps > 0:
+            for s in sorted_streams:
+                if not s.get("fps") or s.get("fps") <= 0:
+                    s["fps"] = detected_stream_fps
 
-        # Dynamic FPS based on actual stream (preserves 20, 24, 25, 30, 50, 60, etc.)
-        phone_fps = int(round(top_fps)) if top_fps > 0 else 30
-        phone_q = _calculate_quality_tier_string(top_w, top_h, phone_fps, "phone")
+        # Separate streams into Browser vs Phone
+        browser_streams = [s for s in sorted_streams if "normal" in s.get("gear", "").lower()]
+        phone_streams = [s for s in sorted_streams if any(k in s.get("gear", "").lower() for k in ("lower", "lowest", "bytevc1"))]
+        dual_streams = [s for s in sorted_streams if "adapt" in s.get("gear", "").lower() or "play_addr" in s.get("gear", "").lower()]
 
-        # Browser quality tier: check web definition / ratio / base web width & height
-        browser_ratio = str(video.get("ratio") or video.get("definition") or "").lower()
-        if "1080" in browser_ratio or (width >= 1080 and height >= 1080):
-            browser_q = f"1080p{phone_fps}"
-        elif "720" in browser_ratio or (width >= 720 or height >= 720):
-            browser_q = f"720p{phone_fps}"
-        elif "540" in browser_ratio or (width >= 540 or height >= 540):
-            browser_q = f"540p{phone_fps}"
-        elif "480" in browser_ratio or (width >= 480 or height >= 480):
-            browser_q = f"480p{phone_fps}"
-        else:
-            browser_q = _calculate_quality_tier_string(width or top_w, height or top_h, phone_fps, "browser")
+        for ds in dual_streams:
+            browser_streams.append(ds)
+            phone_streams.append(ds)
+
+        if not browser_streams:
+            browser_streams = sorted_streams
+        if not phone_streams:
+            phone_streams = sorted_streams
+
+        # Browser Quality: from highest browser stream
+        browser_streams.sort(
+            key=lambda x: (x.get("width", 0) * x.get("height", 0), x.get("fps", 0), x.get("bitrate", 0)),
+            reverse=True
+        )
+        best_b = browser_streams[0] if browser_streams else {}
+        b_w = best_b.get("width") or max_width or width
+        b_h = best_b.get("height") or max_height or height
+        b_fps = int(round(best_b.get("fps") or 0)) or detected_stream_fps or 30
+        browser_q = _calculate_quality_tier_string(b_w, b_h, b_fps, "browser")
+
+        # Phone Quality: from highest phone stream (e.g. 720p60 if only up to 720p)
+        phone_streams.sort(
+            key=lambda x: (x.get("width", 0) * x.get("height", 0), x.get("fps", 0), x.get("bitrate", 0)),
+            reverse=True
+        )
+        best_p = phone_streams[0] if phone_streams else {}
+        p_w = best_p.get("width") or max_width or width
+        p_h = best_p.get("height") or max_height or height
+        p_fps = int(round(best_p.get("fps") or 0)) or detected_stream_fps or 30
+        phone_q = _calculate_quality_tier_string(p_w, p_h, p_fps, "phone")
+
+        overall_fps = max(detected_stream_fps, b_fps, p_fps)
+        if overall_fps <= 0:
+            overall_fps = 30
 
         # ─── Suggested Words / Search Tips ───
         raw_sw = item.get("suggestedWords", []) or item.get("suggested_words", []) or item.get("contents", []) or []
@@ -318,7 +341,7 @@ def _scrape_tiktok_web_sync(url: str) -> dict | None:
             "origin_cover_url": video.get("originCover", ""),
             "width": max_width or width,
             "height": max_height or height,
-            "fps": phone_fps,
+            "fps": overall_fps,
             "size": 0,
             "hd_size": 0,
             "wm_size": 0,

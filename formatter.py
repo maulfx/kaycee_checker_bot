@@ -182,35 +182,74 @@ def format_analysis_message(
 
     probed_fps = int(round(video_quality.get("fps", 0) or 0))
     raw_tiktok_fps = int(round(tiktok_data.get("fps", 0) or 0))
-    final_fps = probed_fps if probed_fps > 0 else (top_stream_fps if top_stream_fps > 0 else (raw_tiktok_fps if raw_tiktok_fps > 0 else 30))
+    # Preserve higher frame rate (e.g. 60fps) if detected from any stream or source
+    final_fps = max(probed_fps, top_stream_fps, raw_tiktok_fps)
+    if final_fps <= 0:
+        final_fps = 30
     fps = final_fps
     file_size = video_quality.get("file_size_bytes") or tiktok_data.get("size", 0)
     
-    # Calculate quality labels dynamically using final_fps so Quality headers ALWAYS match stream fps
+    # Calculate quality labels dynamically using actual streams for Browser vs Phone
     base_dim = min(orig_width, orig_height) if (orig_width > 0 and orig_height > 0) else max(orig_width, orig_height)
-    existing_browser_q = str(tiktok_data.get("browser_quality") or video_quality.get("browser_quality") or "")
-    if "1080" in existing_browser_q or base_dim >= 1080:
-        browser_q = f"1080p{final_fps}"
-    elif "720" in existing_browser_q or base_dim >= 720:
-        browser_q = f"720p{final_fps}"
-    elif "540" in existing_browser_q or base_dim >= 540:
-        browser_q = f"{base_dim}p{final_fps}" if base_dim in (540, 576) else f"576p{final_fps}"
-    elif "480" in existing_browser_q or base_dim >= 480:
-        browser_q = f"480p{final_fps}"
-    else:
-        browser_q = _get_stream_resolution_label(orig_width, orig_height, final_fps, "browser")
 
-    existing_phone_q = str(tiktok_data.get("phone_quality") or video_quality.get("phone_quality") or "")
-    if "1080" in existing_phone_q or base_dim >= 1080:
-        phone_q = f"1080p{final_fps}"
-    elif "720" in existing_phone_q or base_dim >= 720:
-        phone_q = f"720p{final_fps}"
-    elif "540" in existing_phone_q or base_dim >= 540:
-        phone_q = f"{base_dim}p{final_fps}" if base_dim in (540, 576) else f"576p{final_fps}"
-    elif "480" in existing_phone_q or base_dim >= 480:
-        phone_q = f"480p{final_fps}"
+    browser_streams = []
+    phone_streams = []
+    if bitrate_info:
+        for s in bitrate_info:
+            gear_name = s.get("gear", "").lower()
+            if "normal" in gear_name:
+                browser_streams.append(s)
+            if any(k in gear_name for k in ("lower", "lowest", "bytevc1")):
+                phone_streams.append(s)
+            elif "adapt" in gear_name or "play_addr" in gear_name:
+                browser_streams.append(s)
+                phone_streams.append(s)
+
+    # 1. Browser Quality (from highest Browser stream, e.g. normal_1080)
+    if browser_streams:
+        browser_streams.sort(
+            key=lambda x: (x.get("width", 0) * x.get("height", 0), x.get("fps", 0), x.get("bitrate", 0)),
+            reverse=True
+        )
+        best_b = browser_streams[0]
+        b_fps = int(round(best_b.get("fps") or 0)) or final_fps
+        browser_q = _get_stream_resolution_label(best_b.get("width", 0), best_b.get("height", 0), b_fps, best_b.get("gear", "normal"))
     else:
-        phone_q = _get_stream_resolution_label(orig_width, orig_height, final_fps, "phone")
+        existing_browser_q = str(tiktok_data.get("browser_quality") or video_quality.get("browser_quality") or "")
+        if "1080" in existing_browser_q or base_dim >= 1080:
+            browser_q = f"1080p{final_fps}"
+        elif "720" in existing_browser_q or base_dim >= 720:
+            browser_q = f"720p{final_fps}"
+        elif "540" in existing_browser_q or base_dim >= 540:
+            browser_q = f"{base_dim}p{final_fps}" if base_dim in (540, 576) else f"576p{final_fps}"
+        elif "480" in existing_browser_q or base_dim >= 480:
+            browser_q = f"480p{final_fps}"
+        else:
+            browser_q = _get_stream_resolution_label(orig_width, orig_height, final_fps, "browser")
+
+    # 2. Phone Quality (from highest Phone stream, e.g. adapt_lowest_720 or lower_540)
+    if phone_streams:
+        phone_streams.sort(
+            key=lambda x: (x.get("width", 0) * x.get("height", 0), x.get("fps", 0), x.get("bitrate", 0)),
+            reverse=True
+        )
+        best_p = phone_streams[0]
+        p_fps = int(round(best_p.get("fps") or 0)) or final_fps
+        phone_q = _get_stream_resolution_label(best_p.get("width", 0), best_p.get("height", 0), p_fps, best_p.get("gear", "lower"))
+    else:
+        existing_phone_q = str(tiktok_data.get("phone_quality") or video_quality.get("phone_quality") or "")
+        if "1080" in existing_phone_q:
+            phone_q = f"1080p{final_fps}"
+        elif "720" in existing_phone_q:
+            phone_q = f"720p{final_fps}"
+        elif "540" in existing_phone_q:
+            phone_q = f"540p{final_fps}"
+        elif base_dim >= 1080:
+            phone_q = f"1080p{final_fps}"
+        elif base_dim >= 720:
+            phone_q = f"720p{final_fps}"
+        else:
+            phone_q = _get_stream_resolution_label(orig_width, orig_height, final_fps, "phone")
     
     # Region
     region_flag = REGION_FLAGS.get(region_code, "🌐")
